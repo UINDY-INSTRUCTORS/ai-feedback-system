@@ -1,0 +1,171 @@
+# Lab Assignment Rubric Template
+# Customize the criteria, weights, and descriptions for your specific lab
+
+assignment:
+  name: "Lab N: [Assignment Name]"
+  course: "[Course Code]"
+  total_points: 100
+
+criteria:
+  # === PLANNING/DESIGN PHASE ===
+
+  - id: problem_formulation
+    name: "Problem Formulation & Objectives"
+    weight: 10
+    description: |
+      Student clearly identifies objectives, requirements, constraints,
+      and success criteria for the lab work.
+
+    levels:
+      exemplary:
+        description: "Clear, specific objectives with measurable success criteria"
+        point_range: [9, 10]
+      satisfactory:
+        description: "Objectives stated but could be more specific"
+        point_range: [7, 8]
+      developing:
+        description: "Vague or incomplete objectives"
+        point_range: [5, 6]
+      unsatisfactory:
+        description: "Objectives missing or unclear"
+        point_range: [0, 4]
+
+    keywords: [objective, goal, requirement, specification, purpose]
+    common_issues:
+      - "Objectives too vague (e.g., 'complete the lab' instead of specific goals)"
+      - "Missing measurable success criteria"
+      - "No connection to course learning outcomes"
+
+  # === METHODOLOGY ===
+
+  - id: methodology
+    name: "Methodology & Approach"
+    weight: 20
+    description: |
+      Student describes experimental/computational approach, justifies
+      choices, and demonstrates understanding of methods.
+
+    levels:
+      exemplary:
+        description: "Clear methodology with justified choices and consideration of alternatives"
+        point_range: [18, 20]
+      satisfactory:
+        description: "Methodology described but limited justification"
+        point_range: [14, 17]
+      developing:
+        description: "Methodology present but incomplete or unclear"
+        point_range: [10, 13]
+      unsatisfactory:
+        description: "Methodology missing or seriously flawed"
+        point_range: [0, 9]
+
+    keywords: [method, procedure, approach, design, setup, configuration]
+    common_issues:
+      - "No justification for choices made"
+      - "Missing details needed for reproducibility"
+      - "No discussion of alternative approaches"
+
+  # === EXECUTION ===
+
+  - id: execution
+    name: "Execution & Data Collection"
+    weight: 25
+    description: |
+      Student performs work systematically, collects appropriate data,
+      and documents process clearly.
+
+    levels:
+      exemplary:
+        description: "Thorough data collection with clear documentation"
+        point_range: [23, 25]
+      satisfactory:
+        description: "Adequate data collection with some documentation gaps"
+        point_range: [19, 22]
+      developing:
+        description: "Limited data or poor documentation"
+        point_range: [13, 18]
+      unsatisfactory:
+        description: "Insufficient data or missing documentation"
+        point_range: [0, 12]
+
+    keywords: [data, measurement, experiment, test, observation, results]
+    artifacts: ["data/*.csv", "data/*.txt", "images/*.png"]
+    common_issues:
+      - "Too few data points for meaningful analysis"
+      - "Missing metadata (units, conditions, equipment used)"
+      - "No discussion of measurement uncertainty"
+
+  # === ANALYSIS ===
+
+  - id: analysis
+    name: "Analysis & Interpretation"
+    weight: 30
+    description: |
+      Student analyzes results, draws appropriate conclusions,
+      identifies errors/limitations, and demonstrates critical thinking.
+
+    levels:
+      exemplary:
+        description: "Thorough analysis with insightful interpretation and error discussion"
+        point_range: [27, 30]
+      satisfactory:
+        description: "Adequate analysis with some interpretation"
+        point_range: [21, 26]
+      developing:
+        description: "Basic analysis with limited interpretation"
+        point_range: [15, 20]
+      unsatisfactory:
+        description: "Minimal or flawed analysis"
+        point_range: [0, 14]
+
+    keywords: [analysis, interpret, compare, conclude, error, uncertainty, significance]
+    common_issues:
+      - "Results presented without interpretation"
+      - "No error analysis or uncertainty quantification"
+      - "Missing comparison to theory/expectations"
+      - "Ignoring unexpected results"
+
+  # === COMMUNICATION ===
+
+  - id: communication
+    name: "Communication & Documentation"
+    weight: 15
+    description: |
+      Student presents work clearly with proper structure, figures,
+      references, and professional writing.
+
+    levels:
+      exemplary:
+        description: "Excellent organization with clear figures and professional writing"
+        point_range: [14, 15]
+      satisfactory:
+        description: "Good organization with minor issues"
+        point_range: [11, 13]
+      developing:
+        description: "Acceptable but needs improvement in clarity or organization"
+        point_range: [8, 10]
+      unsatisfactory:
+        description: "Poor organization or unclear communication"
+        point_range: [0, 7]
+
+    keywords: [figure, table, caption, label, reference, citation, structure]
+    common_issues:
+      - "Figures missing labels, captions, or units"
+      - "Poor organization or missing sections"
+      - "No references to external sources"
+      - "Unclear or unprofessional writing"
+
+# === CUSTOMIZATION GUIDE ===
+#
+# To adapt this rubric:
+# 1. Update assignment name and total points
+# 2. Adjust criterion weights to match your priorities
+# 3. Modify descriptions to match your assignment type
+# 4. Update keywords to match your domain (e.g., circuit→algorithm, experiment→simulation)
+# 5. Update common_issues based on what you see in student work
+# 6. Add/remove criteria as needed (keep 4-8 criteria for best results)
+#
+# Examples:
+# - Programming assignment: Add "code_quality" criterion
+# - Design project: Add "design_judgements" criterion
+# - Report-only: Remove "execution" criterion

@@ -1,0 +1,59 @@
+# AI Feedback System - Per-Assignment Configuration
+# Copy this into each assignment repo and customize
+
+# === BASIC SETTINGS (customize these) ===
+
+assignment:
+  name: "Lab 1: Amplifier Design"
+  course: "EENG 320"
+  type: "lab"  # lab, project, assignment, quiz
+
+report:
+  filename: "index.qmd"  # Where is the student's report?
+  format: "quarto"       # quarto, markdown, jupyter, latex
+
+# === RUBRIC SETTINGS ===
+
+rubric:
+  file: "rubric.yml"  # Rubric file in same directory
+
+  # How many total points?
+  total_points: 120  # Optional: calculated from rubric if not specified
+
+# === GUIDANCE SETTINGS ===
+
+guidance:
+  file: "guidance.md"  # Guidance file in same directory
+
+  # Feedback style
+  tone: "constructive"     # constructive, formal, encouraging
+  specificity: "high"      # high, medium, low
+  include_examples: true
+
+# === AI MODEL SETTINGS ===
+
+model:
+  primary: "gpt-4o"
+  fallback: "gpt-4o-mini"
+
+  # Enterprise GitHub Models limits (adjust if you have different tier)
+  max_concurrent_requests: 2
+
+# === GITHUB ISSUE SETTINGS ===
+
+issue:
+  enabled: true
+  label: "ai-feedback"
+  title: "AI Feedback: {assignment_name}"
+
+# === ADVANCED SETTINGS (usually don't need to change) ===
+
+analysis:
+  strategy: "criterion-based"  # criterion-based or full-report
+  parallel: true
+  max_workers: 2
+
+features:
+  code_analysis: true
+  figure_checking: true
+  citation_checking: true

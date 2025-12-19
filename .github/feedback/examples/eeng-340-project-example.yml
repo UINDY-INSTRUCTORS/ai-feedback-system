@@ -1,0 +1,407 @@
+# EENG 340 - Interfacing Laboratory Example Rubric
+# Focus: Microcontroller systems, sensors, embedded design, engineering process
+
+assignment:
+  name: "Generic Project"
+  course: "EENG 340"
+  type: "project"
+  total_points: 100
+
+criteria:
+  - id: introduction
+    name: "Introduction, background, purpose etc."
+    weight: 5
+    description: |
+      Strong introduction that provides background context and clearly states
+      the purpose of the project.
+
+    levels:
+      exemplary:
+        description: "Strong introduction with clear sense of background and purpose."
+        point_range: [4, 5]
+        indicators:
+          - "Comprehensive background provided"
+          - "Purpose clearly stated"
+          - "Context well established"
+          - "Motivates the project effectively"
+      satisfactory:
+        description: "Introduction present but doesn't give good idea of background/purpose."
+        point_range: [2, 3]
+        indicators:
+          - "Basic introduction present"
+          - "Background or purpose somewhat unclear"
+          - "Limited context provided"
+      developing:
+        description: "Very little introduction provided."
+        point_range: [1, 1]
+        indicators:
+          - "Minimal introduction"
+          - "Background/purpose barely mentioned"
+      unsatisfactory:
+        description: "No introduction provided."
+        point_range: [0, 0]
+        indicators:
+          - "Introduction missing entirely"
+
+    keywords: [introduction, background, purpose, motivation, context, overview]
+    common_issues:
+      - "Jumps directly into design without context"
+      - "Purpose statement too vague or generic"
+      - "No connection to course concepts or real-world applications"
+      - "Missing background on technologies used"
+
+  - id: problem_formulation
+    name: "Identify and Formulate problem/design goals"
+    weight: 10
+    description: |
+      Clear section that identifies the problem to be solved and formulates
+      specific, measurable design goals and requirements (ABET 1a).
+
+    levels:
+      exemplary:
+        description: "Section with this label that seems completely reasonable with clear goals."
+        point_range: [8, 10]
+        indicators:
+          - "Problem clearly identified"
+          - "Design goals specific and measurable"
+          - "Requirements well defined"
+          - "Constraints identified"
+      satisfactory:
+        description: "Section present that makes sense and addresses problem/goals."
+        point_range: [5, 7]
+        indicators:
+          - "Problem stated"
+          - "Some design goals present"
+          - "Requirements somewhat clear"
+      developing:
+        description: "Section with this label exists but doesn't say much."
+        point_range: [2, 4]
+        indicators:
+          - "Problem vaguely stated"
+          - "Goals not specific or measurable"
+          - "Requirements unclear"
+      unsatisfactory:
+        description: "No section with this label."
+        point_range: [0, 1]
+        indicators:
+          - "Problem formulation missing"
+          - "No design goals stated"
+
+    keywords: [problem, requirements, specifications, goals, objectives, constraints]
+    common_issues:
+      - "Design goals too vague (e.g., 'make it work well')"
+      - "No quantitative specifications (timing, accuracy, range)"
+      - "Constraints not identified (cost, power, size)"
+      - "No prioritization of requirements"
+
+  - id: design_solution
+    name: "Develop design/solution"
+    weight: 15
+    description: |
+      Viable design solution with proper justification of choices. Shows
+      engineering design process (ABET 1b).
+
+    levels:
+      exemplary:
+        description: "Viable design with clear justification and trade-off analysis."
+        point_range: [10, 15]
+        indicators:
+          - "Complete, viable design presented"
+          - "Component/approach choices justified"
+          - "Alternative designs considered"
+          - "Trade-offs analyzed"
+          - "Design meets stated requirements"
+      satisfactory:
+        description: "Design present and makes sense but slightly flawed or incomplete."
+        point_range: [5, 9]
+        indicators:
+          - "Design mostly viable"
+          - "Some justification provided"
+          - "Minor issues or gaps"
+      developing:
+        description: "Design present but has serious problems or missing key elements."
+        point_range: [2, 4]
+        indicators:
+          - "Design has serious flaws"
+          - "Poor or missing justification"
+          - "Key elements missing"
+      unsatisfactory:
+        description: "No design present."
+        point_range: [0, 1]
+        indicators:
+          - "Design missing"
+          - "Incomplete or non-viable"
+
+    keywords: [design, solution, architecture, component selection, schematic, block diagram]
+    artifacts: ["diagrams/*.png", "schematics/*.png", "design/*.pdf"]
+    common_issues:
+      - "No block diagram or system architecture"
+      - "Component choices not justified"
+      - "No consideration of alternatives"
+      - "Design doesn't address all requirements"
+      - "Missing schematics or diagrams"
+
+  - id: background_knowledge
+    name: "Acquire background knowledge (Data-sheets, etc.)"
+    weight: 10
+    description: |
+      Evidence of acquiring and applying technical background knowledge from
+      datasheets, application notes, or academic sources (ABET 7a).
+
+    levels:
+      exemplary:
+        description: "Clear reference to datasheets/papers that makes sense and is applied."
+        point_range: [8, 10]
+        indicators:
+          - "Datasheets referenced and cited"
+          - "Key specifications extracted and used"
+          - "Application notes or papers referenced"
+          - "Background knowledge applied to design"
+      satisfactory:
+        description: "Mention of datasheets but relationship to design somewhat unclear."
+        point_range: [5, 7]
+        indicators:
+          - "Datasheets mentioned"
+          - "Some specifications referenced"
+          - "Limited application to design"
+      developing:
+        description: "No reference to datasheets or papers."
+        point_range: [2, 4]
+        indicators:
+          - "Minimal technical documentation referenced"
+          - "Background knowledge not evident"
+      unsatisfactory:
+        description: "No reference to anything."
+        point_range: [0, 1]
+        indicators:
+          - "No datasheets or technical sources referenced"
+
+    keywords: [datasheet, specifications, application note, reference, research, documentation]
+    common_issues:
+      - "Datasheets not referenced or cited"
+      - "Key specifications (voltage, current, timing) not mentioned"
+      - "No evidence of reading/understanding datasheets"
+      - "Background knowledge not connected to design choices"
+
+  - id: design_judgements
+    name: "Design judgements (Global, Econ, Soc, Env)"
+    weight: 10
+    description: |
+      Discussion of design considerations including global, economic, social,
+      and environmental factors (ABET 4b).
+
+    levels:
+      exemplary:
+        description: "Section addressing design judgements with thoughtful consideration."
+        point_range: [8, 10]
+        indicators:
+          - "Multiple factors addressed"
+          - "Thoughtful analysis of impacts"
+          - "Trade-offs considered"
+          - "Realistic assessment"
+      satisfactory:
+        description: "Design judgements mentioned but not fully developed."
+        point_range: [5, 7]
+        indicators:
+          - "Some factors mentioned"
+          - "Basic consideration given"
+          - "Could be more thorough"
+      developing:
+        description: "Design judgements vague or generic."
+        point_range: [2, 4]
+        indicators:
+          - "Very brief or superficial"
+          - "Generic statements only"
+          - "Not specific to this design"
+      unsatisfactory:
+        description: "No section addressing design judgements."
+        point_range: [0, 1]
+        indicators:
+          - "Design judgements missing"
+
+    keywords: [economic, environmental, social, global, sustainability, cost, impact]
+    common_issues:
+      - "Generic statements not specific to design"
+      - "Only cost mentioned, other factors ignored"
+      - "No consideration of environmental impact"
+      - "Social/global impacts not discussed"
+      - "Section feels like checkbox exercise"
+
+  - id: experiments
+    name: "Conduct Experiments, acquire data"
+    weight: 15
+    description: |
+      Strong set of experiments used to validate the design with proper data
+      acquisition and documentation (ABET 6a).
+
+    levels:
+      exemplary:
+        description: "Strong set of experiments used to validate designs with comprehensive data."
+        point_range: [10, 15]
+        indicators:
+          - "Multiple relevant experiments conducted"
+          - "Systematic testing approach"
+          - "Data properly acquired and documented"
+          - "Test conditions clearly stated"
+          - "Results validate design"
+      satisfactory:
+        description: "Set of experiments present but could be improved."
+        point_range: [5, 9]
+        indicators:
+          - "Basic experiments conducted"
+          - "Some data acquired"
+          - "Could be more comprehensive"
+      developing:
+        description: "Missing experiments or deeply flawed approach."
+        point_range: [2, 4]
+        indicators:
+          - "Very limited testing"
+          - "Experiments poorly designed"
+          - "Data quality issues"
+      unsatisfactory:
+        description: "No evidence of experiments."
+        point_range: [0, 1]
+        indicators:
+          - "No experiments conducted"
+          - "No validation of design"
+
+    keywords: [experiment, test, measurement, data, validation, oscilloscope, multimeter]
+    artifacts: ["data/*.csv", "measurements/*.txt", "scope_captures/*.png"]
+    common_issues:
+      - "No systematic testing plan"
+      - "Missing test data or measurements"
+      - "Test conditions not documented"
+      - "No photos or scope captures of tests"
+      - "Results don't validate design claims"
+
+  - id: simulations
+    name: "Conduct Simulations, make predictions"
+    weight: 10
+    description: |
+      Use of simulation tools to predict behavior and validate design before
+      implementation (ABET 6b).
+
+    levels:
+      exemplary:
+        description: "Numerous simulation results showing good agreement with theory."
+        point_range: [8, 10]
+        indicators:
+          - "Multiple relevant simulations"
+          - "Good agreement with predictions"
+          - "Simulation results inform design"
+          - "Tools used appropriately"
+      satisfactory:
+        description: "Some simulations present but not extensive."
+        point_range: [5, 7]
+        indicators:
+          - "Basic simulations conducted"
+          - "Limited scope"
+          - "Results somewhat useful"
+      developing:
+        description: "Only one or two simulations, limited value."
+        point_range: [2, 4]
+        indicators:
+          - "Minimal simulation effort"
+          - "Results not well explained"
+      unsatisfactory:
+        description: "No simulations provided."
+        point_range: [0, 1]
+        indicators:
+          - "No simulation results"
+
+    keywords: [simulation, SPICE, model, prediction, analysis, LTspice]
+    artifacts: ["simulations/*.asc", "simulations/*.png", "ltspice/*.asc"]
+    common_issues:
+      - "No simulations performed"
+      - "Simulations not compared to experimental results"
+      - "Simulation setup not explained"
+      - "Results not used to inform design"
+
+  - id: interpret_results
+    name: "Interpret Results, draw inferences"
+    weight: 20
+    description: |
+      Strong evidence of interpreting both simulation and experimental results,
+      drawing meaningful inferences and conclusions (ABET 6c).
+
+    levels:
+      exemplary:
+        description: "Strong evidence of interpreting results with insightful inferences."
+        point_range: [13, 20]
+        indicators:
+          - "Thorough interpretation of all results"
+          - "Meaningful inferences drawn"
+          - "Simulation vs experiment comparison"
+          - "Discrepancies explained"
+          - "Limitations acknowledged"
+          - "Connects results to requirements"
+      satisfactory:
+        description: "Some evidence of interpreting results with basic inferences."
+        point_range: [7, 12]
+        indicators:
+          - "Basic interpretation present"
+          - "Some inferences made"
+          - "Could be more thorough"
+      developing:
+        description: "Small amount of interpretation, mostly just stating results."
+        point_range: [3, 6]
+        indicators:
+          - "Minimal interpretation"
+          - "Results stated without analysis"
+          - "Few inferences"
+      unsatisfactory:
+        description: "No evidence of interpretation of results."
+        point_range: [0, 2]
+        indicators:
+          - "No interpretation provided"
+          - "Results just presented without discussion"
+
+    keywords: [analysis, interpretation, discussion, inference, comparison, error, performance]
+    common_issues:
+      - "Results presented but not interpreted"
+      - "No comparison between simulation and experiment"
+      - "Discrepancies not explained"
+      - "No connection to design requirements"
+      - "Limitations or errors not discussed"
+      - "Missing performance analysis"
+
+  - id: conclusion
+    name: "Summary/Conclusion"
+    weight: 5
+    description: |
+      Strong concluding summary of findings, design outcomes, and key takeaways.
+
+    levels:
+      exemplary:
+        description: "Strong concluding summary of findings and design outcomes."
+        point_range: [4, 5]
+        indicators:
+          - "Clear summary of work"
+          - "Key findings highlighted"
+          - "Design success/limitations stated"
+          - "Future improvements discussed"
+      satisfactory:
+        description: "Summary present but lacks depth or clear conclusion."
+        point_range: [2, 3]
+        indicators:
+          - "Basic summary present"
+          - "Could be more comprehensive"
+      developing:
+        description: "Summary extremely brief or missing key findings."
+        point_range: [1, 1]
+        indicators:
+          - "Very brief"
+          - "Key findings missing"
+      unsatisfactory:
+        description: "No summary or conclusion present."
+        point_range: [0, 0]
+        indicators:
+          - "Conclusion missing"
+
+    keywords: [conclusion, summary, findings, outcomes, future work, lessons learned]
+    common_issues:
+      - "Just repeats results without synthesis"
+      - "Doesn't address whether requirements were met"
+      - "No reflection on lessons learned"
+      - "Missing or extremely brief"
+      - "No discussion of future improvements"

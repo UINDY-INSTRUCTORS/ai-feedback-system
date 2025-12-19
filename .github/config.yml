@@ -1,0 +1,59 @@
+# EENG 320 Feedback System Configuration
+#
+# For enterprise/education account settings and rate limits, see:
+# .github/feedback/GITHUB_MODELS_SETTINGS.md
+
+# Report file settings
+report_file: "index.qmd"
+report_format: "quarto"  # quarto, markdown, jupyter, latex
+
+# Optional supplementary files to analyze
+# These files will be checked for existence and referenced in feedback
+supplementary_files:
+  - "schematics/*.kicad_sch"
+  - "schematics/*.png"
+  - "data/*.csv"
+  - "data/*.txt"
+  - "_quarto.yml"
+
+# AI model selection
+# GitHub Models available: gpt-4o, gpt-4o-mini, claude-3-5-sonnet-20241022,
+# llama-3.1-405b-instruct, phi-4, mistral-large-2, deepseek-r1, grok-2
+#
+# For classroom use:
+#   - Classes < 30 students: Use gpt-4o (best quality)
+#   - Classes 30-100: Use gpt-4o-mini (faster, more economical)
+#   - Classes > 100: Use gpt-4o-mini + stagger feedback requests
+#
+# Education accounts have much higher rate limits than personal accounts
+# (5,000 req/hour vs 150 req/day). See GITHUB_MODELS_SETTINGS.md for details.
+model:
+  primary: "gpt-4o"       # Best quality for detailed feedback
+  fallback: "gpt-4o-mini" # Fallback if rate limited
+
+# Token management
+# Adjust these if you encounter token limit errors or want to optimize costs
+max_input_tokens: 15000    # Context window for analyzing report sections
+max_output_tokens: 3000    # Enough for detailed feedback per criterion
+
+# Truncation strategy if report is too long
+truncation_strategy: "smart"  # "smart" (keep headers + samples), "head" (first N tokens), "tail" (last N tokens)
+
+# GitHub Issue settings
+issue_label: "ai-feedback"
+issue_title_template: "📋 AI Feedback: {tag_name} ({date})"
+
+# Feedback history management
+close_previous_issues: false  # Keep all feedback issues open for history tracking
+label_previous_issues: true   # Add "superseded" label to previous feedback when new one is generated
+
+# Timeout settings
+request_timeout: 120  # API request timeout in seconds
+workflow_timeout: 10  # GitHub Actions workflow timeout in minutes
+                      # Increase if processing large classes simultaneously
+
+# Feature flags
+enable_code_analysis: true       # Analyze Python code blocks in report
+enable_figure_checking: true     # Verify figures are referenced in text
+enable_citation_checking: true   # Check for datasheet/paper references
+enable_section_checking: true    # Verify required sections exist

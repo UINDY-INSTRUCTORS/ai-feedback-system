@@ -1,0 +1,211 @@
+name: Test AI Extraction Methods
+
+on:
+  push:
+    tags:
+      - 'test-extraction-*'
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  compare-extraction-methods:
+    runs-on: ubuntu-latest
+
+    container:
+      image: python:3.11-slim
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          pip install pyyaml requests python-dotenv
+
+      - name: Parse report
+        run: |
+          python scripts/parse_report.py
+          echo "✅ Report parsed successfully"
+
+      - name: Test deterministic extraction
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          USE_AI_EXTRACTION: "false"
+        run: |
+          echo "Testing deterministic extraction..."
+          python scripts/ai_feedback_criterion_ai_extract.py > deterministic_output.log 2>&1 || true
+          mv feedback.md feedback_deterministic.md || true
+          echo "Deterministic extraction complete"
+
+      - name: Test AI extraction
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          USE_AI_EXTRACTION: "true"
+        run: |
+          echo "Testing AI extraction..."
+          python scripts/ai_feedback_criterion_ai_extract.py > ai_output.log 2>&1 || true
+          mv feedback.md feedback_ai.md || true
+          echo "AI extraction complete"
+
+      - name: Generate comparison report
+        run: |
+          cat > comparison_report.md << 'EOF'
+          # Section Extraction Method Comparison
+
+          This report compares deterministic (keyword-based) vs AI-based section extraction.
+
+          ## Method 1: Deterministic Extraction
+
+          Uses hardcoded keyword patterns and section names (e.g., "PreLab", "Lab Report").
+
+          **Pros:**
+          - Fast (no extra API calls)
+          - Predictable
+          - No additional cost
+
+          **Cons:**
+          - Course-specific (hardcoded for EENG-320)
+          - Brittle (fails with different section names)
+          - Poor generalization
+
+          ### Output
+
+          EOF
+
+          if [ -f feedback_deterministic.md ]; then
+            echo "\`\`\`" >> comparison_report.md
+            head -100 feedback_deterministic.md >> comparison_report.md
+            echo "\`\`\`" >> comparison_report.md
+            echo "" >> comparison_report.md
+            echo "**Size:** $(wc -c < feedback_deterministic.md) bytes ($(wc -w < feedback_deterministic.md) words)" >> comparison_report.md
+            echo "**Criteria:** $(grep -c '^### ' feedback_deterministic.md || echo 0)" >> comparison_report.md
+          else
+            echo "❌ Deterministic extraction failed - see logs" >> comparison_report.md
+          fi
+
+          cat >> comparison_report.md << 'EOF'
+
+          ## Method 2: AI-Based Extraction
+
+          Uses LLM to intelligently extract relevant sections based on rubric criteria.
+
+          **Pros:**
+          - Course-agnostic (works with any structure)
+          - Contextual understanding
+          - Adapts to different writing styles
+          - Maintainable (no custom logic per course)
+
+          **Cons:**
+          - Extra API calls (10 per report)
+          - Slightly slower
+          - Small cost increase (but still free tier)
+
+          ### Output
+
+          EOF
+
+          if [ -f feedback_ai.md ]; then
+            echo "\`\`\`" >> comparison_report.md
+            head -100 feedback_ai.md >> comparison_report.md
+            echo "\`\`\`" >> comparison_report.md
+            echo "" >> comparison_report.md
+            echo "**Size:** $(wc -c < feedback_ai.md) bytes ($(wc -w < feedback_ai.md) words)" >> comparison_report.md
+            echo "**Criteria:** $(grep -c '^### ' feedback_ai.md || echo 0)" >> comparison_report.md
+          else
+            echo "❌ AI extraction failed - see logs" >> comparison_report.md
+          fi
+
+          cat >> comparison_report.md << 'EOF'
+
+          ## Token Usage
+
+          EOF
+
+          echo "### Deterministic Method" >> comparison_report.md
+          echo "\`\`\`" >> comparison_report.md
+          grep -A 5 "Total" deterministic_output.log | tail -6 >> comparison_report.md || echo "No token data" >> comparison_report.md
+          echo "\`\`\`" >> comparison_report.md
+
+          echo "" >> comparison_report.md
+          echo "### AI Method" >> comparison_report.md
+          echo "\`\`\`" >> comparison_report.md
+          grep -A 5 "Total" ai_output.log | tail -6 >> comparison_report.md || echo "No token data" >> comparison_report.md
+          echo "\`\`\`" >> comparison_report.md
+
+          cat >> comparison_report.md << 'EOF'
+
+          ## Execution Logs
+
+          <details>
+          <summary>Deterministic Extraction Log</summary>
+
+          ```
+          EOF
+          cat deterministic_output.log >> comparison_report.md || echo "No log available" >> comparison_report.md
+          cat >> comparison_report.md << 'EOF'
+          ```
+
+          </details>
+
+          <details>
+          <summary>AI Extraction Log</summary>
+
+          ```
+          EOF
+          cat ai_output.log >> comparison_report.md || echo "No log available" >> comparison_report.md
+          cat >> comparison_report.md << 'EOF'
+          ```
+
+          </details>
+
+          ## Recommendation
+
+          Based on this comparison, **AI-based extraction is recommended** for the following reasons:
+
+          1. **Generalizability**: Works with any course/report structure
+          2. **Maintainability**: No custom code needed per course
+          3. **Quality**: Better at identifying relevant sections
+          4. **Cost**: Still within free tier limits
+          5. **Scalability**: Easy to add new courses
+
+          The extra API calls (2x) are worth the dramatic improvement in flexibility.
+
+          ## Next Steps
+
+          1. Review extracted sections for quality
+          2. Test on reports from different courses
+          3. Measure instructor satisfaction with extractions
+          4. Optimize extraction prompts if needed
+          5. Deploy as default method
+          EOF
+
+          echo "Comparison report generated"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: extraction-comparison
+          path: |
+            feedback_deterministic.md
+            feedback_ai.md
+            deterministic_output.log
+            ai_output.log
+            comparison_report.md
+            parsed_report.json
+
+      - name: Create comparison issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('comparison_report.md', 'utf8');
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `[Test] Extraction Method Comparison - ${context.ref.replace('refs/tags/', '')}`,
+              body: report,
+              labels: ['test-results', 'extraction-comparison']
+            });

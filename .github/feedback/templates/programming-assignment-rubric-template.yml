@@ -1,0 +1,155 @@
+# Programming Assignment Rubric Template
+# For computational/programming assignments with code deliverables
+
+assignment:
+  name: "Assignment N: [Programming Task]"
+  course: "[Course Code]"
+  total_points: 100
+
+criteria:
+  - id: correctness
+    name: "Correctness & Functionality"
+    weight: 35
+    description: |
+      Code produces correct results and handles edge cases appropriately.
+
+    levels:
+      exemplary:
+        description: "All functionality works correctly including edge cases"
+        point_range: [32, 35]
+      satisfactory:
+        description: "Core functionality works with minor issues"
+        point_range: [25, 31]
+      developing:
+        description: "Partial functionality with notable errors"
+        point_range: [18, 24]
+      unsatisfactory:
+        description: "Major errors or missing functionality"
+        point_range: [0, 17]
+
+    keywords: [output, result, correct, test, validate, verify]
+    common_issues:
+      - "Doesn't handle edge cases (empty input, zero, negative numbers)"
+      - "Off-by-one errors"
+      - "Incorrect algorithm implementation"
+
+  - id: code_quality
+    name: "Code Quality & Style"
+    weight: 20
+    description: |
+      Code is readable, well-organized, follows conventions,
+      and uses appropriate data structures/algorithms.
+
+    levels:
+      exemplary:
+        description: "Clean, idiomatic code with excellent organization"
+        point_range: [18, 20]
+      satisfactory:
+        description: "Readable code with minor style issues"
+        point_range: [14, 17]
+      developing:
+        description: "Code works but difficult to read or poorly organized"
+        point_range: [10, 13]
+      unsatisfactory:
+        description: "Very poor code quality"
+        point_range: [0, 9]
+
+    keywords: [style, naming, organization, structure, readability, PEP8, convention]
+    common_issues:
+      - "Inconsistent naming conventions"
+      - "Functions too long or doing too many things"
+      - "Magic numbers instead of named constants"
+      - "Poor variable names (x, temp, data)"
+
+  - id: documentation
+    name: "Documentation & Comments"
+    weight: 15
+    description: |
+      Code includes docstrings, comments explaining complex logic,
+      and clear README/usage instructions.
+
+    levels:
+      exemplary:
+        description: "Comprehensive documentation for all functions and complex sections"
+        point_range: [14, 15]
+      satisfactory:
+        description: "Basic documentation with some gaps"
+        point_range: [11, 13]
+      developing:
+        description: "Minimal documentation"
+        point_range: [8, 10]
+      unsatisfactory:
+        description: "Little to no documentation"
+        point_range: [0, 7]
+
+    keywords: [docstring, comment, documentation, README, usage, example]
+    common_issues:
+      - "No docstrings for functions"
+      - "Comments describe what code does (obvious) instead of why"
+      - "Missing usage examples"
+
+  - id: efficiency
+    name: "Efficiency & Performance"
+    weight: 10
+    description: |
+      Algorithm choice and implementation are reasonably efficient
+      for the problem size.
+
+    levels:
+      exemplary:
+        description: "Optimal or near-optimal algorithm with efficient implementation"
+        point_range: [9, 10]
+      satisfactory:
+        description: "Reasonable efficiency for problem size"
+        point_range: [7, 8]
+      developing:
+        description: "Inefficient but acceptable for small inputs"
+        point_range: [5, 6]
+      unsatisfactory:
+        description: "Severely inefficient or inappropriate algorithm"
+        point_range: [0, 4]
+
+    keywords: [performance, complexity, efficiency, algorithm, optimization]
+    common_issues:
+      - "Nested loops where vectorization would work (NumPy)"
+      - "Repeatedly recalculating same values"
+      - "Inappropriate data structure (list when set is needed)"
+
+  - id: analysis
+    name: "Analysis & Interpretation"
+    weight: 20
+    description: |
+      Student analyzes results, validates correctness,
+      discusses performance, and draws conclusions.
+
+    levels:
+      exemplary:
+        description: "Thorough analysis with validation and performance discussion"
+        point_range: [18, 20]
+      satisfactory:
+        description: "Basic analysis and validation"
+        point_range: [14, 17]
+      developing:
+        description: "Limited analysis or validation"
+        point_range: [10, 13]
+      unsatisfactory:
+        description: "Minimal or missing analysis"
+        point_range: [0, 9]
+
+    keywords: [test, validate, performance, timing, accuracy, comparison]
+    common_issues:
+      - "No testing or validation of correctness"
+      - "No discussion of algorithm complexity"
+      - "No comparison of different approaches"
+
+# === ADDITIONAL CRITERIA (add if relevant) ===
+#
+#  - id: testing
+#    name: "Testing & Error Handling"
+#    weight: 10
+#    keywords: [test, exception, error, try, catch, unittest, pytest]
+#
+#  - id: version_control
+#    name: "Version Control Practices"
+#    weight: 5
+#    keywords: [commit, git, message, history, branch]

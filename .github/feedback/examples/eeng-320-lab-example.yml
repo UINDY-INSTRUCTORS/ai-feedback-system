@@ -1,0 +1,178 @@
+# EENG 320 - Electronics Lab Example Rubric
+# Focus: Analog circuit design, simulation, and experimental validation
+
+assignment:
+  name: "Lab 1: Amplifier Design"
+  course: "EENG 320"
+  type: "lab"
+  total_points: 120
+
+criteria:
+  - id: problem_formulation
+    name: "Problem Formulation & Design Goals"
+    weight: 10
+    description: |
+      Student identifies design objectives, specifications, constraints,
+      and success criteria. Should include quantitative targets (gain, bandwidth,
+      impedance, etc.)
+
+    levels:
+      exemplary:
+        description: "Clear quantitative specifications with well-defined constraints"
+        point_range: [9, 10]
+      satisfactory:
+        description: "Specifications present but some lack quantitative detail"
+        point_range: [7, 8]
+      developing:
+        description: "Vague specifications or missing key constraints"
+        point_range: [5, 6]
+      unsatisfactory:
+        description: "No clear specifications or objectives"
+        point_range: [0, 4]
+
+    keywords: [objective, specification, requirement, constraint, gain, bandwidth, impedance]
+    common_issues:
+      - "Vague goals like 'make it work' instead of '20dB gain, 100Hz-10kHz'"
+      - "Missing constraints (power, cost, component availability)"
+      - "No success criteria defined"
+
+  - id: design_development
+    name: "Circuit Design & Component Selection"
+    weight: 15
+    description: |
+      Student develops circuit design, creates schematic, selects components
+      with justification, and performs design calculations.
+
+    levels:
+      exemplary:
+        description: "Well-justified component choices with clear schematic and calculations"
+        point_range: [13, 15]
+      satisfactory:
+        description: "Valid design with some justification gaps"
+        point_range: [10, 12]
+      developing:
+        description: "Design present but poorly justified or incomplete"
+        point_range: [6, 9]
+      unsatisfactory:
+        description: "No design or serious flaws"
+        point_range: [0, 5]
+
+    keywords: [schematic, component, resistor, capacitor, op-amp, calculation, justify]
+    artifacts: ["schematics/*.png", "schematics/*.kicad_sch"]
+    common_issues:
+      - "Components chosen without explanation (why 10kΩ vs 1kΩ?)"
+      - "No comparison of alternative topologies"
+      - "Missing or unclear schematic labels"
+      - "No design calculations shown"
+
+  - id: simulations
+    name: "Circuit Simulations & Predictions"
+    weight: 15
+    description: |
+      Student performs LTspice simulations with multiple test conditions,
+      parameter sweeps, and comparisons to theoretical predictions.
+
+    levels:
+      exemplary:
+        description: "Comprehensive simulations (DC, AC, transient) with theory comparison"
+        point_range: [13, 15]
+      satisfactory:
+        description: "Basic simulations with limited variety or comparison"
+        point_range: [10, 12]
+      developing:
+        description: "Minimal simulations or missing key analyses"
+        point_range: [6, 9]
+      unsatisfactory:
+        description: "No simulations or severely incomplete"
+        point_range: [0, 5]
+
+    keywords: [LTspice, simulation, SPICE, AC analysis, transient, frequency response, Bode plot]
+    artifacts: ["*.asc", "simulations/*.png"]
+    common_issues:
+      - "Only one test condition (no parameter sweep)"
+      - "No comparison to hand calculations"
+      - "Missing DC operating point or frequency response"
+
+  - id: experimental_work
+    name: "Experimental Setup & Measurements"
+    weight: 25
+    description: |
+      Student builds circuit, documents setup, performs comprehensive
+      measurements, and collects data systematically.
+
+    levels:
+      exemplary:
+        description: "Clear setup documentation with comprehensive measurements"
+        point_range: [23, 25]
+      satisfactory:
+        description: "Adequate measurements with some documentation gaps"
+        point_range: [19, 22]
+      developing:
+        description: "Limited measurements or poor documentation"
+        point_range: [13, 18]
+      unsatisfactory:
+        description: "Minimal experimental work"
+        point_range: [0, 12]
+
+    keywords: [oscilloscope, multimeter, function generator, measurement, breadboard, photo, setup]
+    artifacts: ["data/*.csv", "photos/*.jpg", "measurements/*.png"]
+    common_issues:
+      - "Setup not clearly documented or photographed"
+      - "Only one measurement instead of sweeping parameters"
+      - "No equipment settings documented (scope V/div, timebase, etc.)"
+      - "Missing uncertainty or error estimates"
+
+  - id: analysis_interpretation
+    name: "Data Analysis & Results Interpretation"
+    weight: 25
+    description: |
+      Student analyzes data, compares theory/simulation/measurement,
+      performs error analysis, and draws meaningful conclusions.
+
+    levels:
+      exemplary:
+        description: "Thorough 3-way comparison with insightful error analysis"
+        point_range: [23, 25]
+      satisfactory:
+        description: "Basic comparison with some error discussion"
+        point_range: [19, 22]
+      developing:
+        description: "Limited analysis or missing comparisons"
+        point_range: [13, 18]
+      unsatisfactory:
+        description: "Minimal or flawed analysis"
+        point_range: [0, 12]
+
+    keywords: [analysis, compare, error, uncertainty, measured vs simulated, frequency response]
+    common_issues:
+      - "No comparison of theory vs sim vs measurement"
+      - "Discrepancies not explained"
+      - "No error bars or uncertainty discussion"
+      - "Results presented without interpretation"
+
+  - id: technical_communication
+    name: "Technical Communication & Documentation"
+    weight: 10
+    description: |
+      Report is well-organized with clear figures, proper citations,
+      and professional presentation.
+
+    levels:
+      exemplary:
+        description: "Excellent organization with professional figures and citations"
+        point_range: [9, 10]
+      satisfactory:
+        description: "Good organization with minor presentation issues"
+        point_range: [7, 8]
+      developing:
+        description: "Acceptable but needs improvement in clarity or organization"
+        point_range: [5, 6]
+      unsatisfactory:
+        description: "Poor organization or unclear presentation"
+        point_range: [0, 4]
+
+    keywords: [figure, caption, label, reference, datasheet, citation, organization]
+    common_issues:
+      - "Figures missing captions, labels, or units"
+      - "No references to datasheets used"
+      - "Poor organization or missing sections"

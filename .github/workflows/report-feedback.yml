@@ -1,0 +1,61 @@
+name: AI Report Feedback
+
+on:
+  push:
+    tags:
+      - 'feedback-*'
+      - 'review-*'
+
+permissions:
+  contents: read
+  issues: write
+  models: read
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    # Use a container for consistent environment
+    container:
+      image: python:3.11-slim
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Get full history for context
+
+      - name: Install dependencies
+        run: |
+          pip install pyyaml requests
+
+      - name: Parse report
+        id: parse
+        run: python scripts/parse_report.py
+        continue-on-error: false
+
+      - name: Generate AI feedback
+        id: feedback
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python scripts/ai_feedback_criterion.py
+        continue-on-error: false
+
+      - name: Create feedback issue
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ github.ref_name }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: python scripts/create_issue.py
+        continue-on-error: false
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: feedback-artifacts
+          path: |
+            parsed_report.json
+            feedback.md
+          retention-days: 30

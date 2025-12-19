@@ -1,0 +1,222 @@
+# PHYS/MENG 230 - Laboratory Instrumentation Example Rubric
+# Focus: Measurement techniques, circuit construction, statistics, uncertainty analysis
+
+assignment:
+  name: "Lab Report"
+  course: "PHYS/MENG 230"
+  type: "lab"
+  total_points: 100
+
+criteria:
+  - id: abstract_description
+    name: "Abstract & Description"
+    weight: 10
+    description: |
+      Abstract clearly and concisely states the project idea, results, and precision.
+      Description explains the significance of the project.
+
+    levels:
+      excellent:
+        description: "Abstract is clear and concise with precise results. Description clearly conveys significance."
+        point_range: [7, 10]
+        indicators:
+          - "Project idea stated absolutely clearly"
+          - "Results stated with precision/uncertainty"
+          - "Significance of project well explained"
+      good:
+        description: "Abstract present with basic merit. Description gives some idea of significance."
+        point_range: [4, 6]
+        indicators:
+          - "Basic idea of project is stated"
+          - "Result is stated (may lack precision)"
+          - "Description present but could be clearer"
+      poor:
+        description: "Abstract missing or lacks substantial merit. Description missing or unclear."
+        point_range: [0, 3]
+        indicators:
+          - "Project idea not clearly stated"
+          - "Result missing or stated unclearly"
+          - "Description missing or doesn't convey significance"
+
+    keywords: [abstract, description, significance, result, precision, purpose]
+    common_issues:
+      - "Abstract too vague or overly detailed"
+      - "Results stated without precision or uncertainty"
+      - "Significance of project not explained"
+      - "Missing connection to course concepts"
+
+  - id: circuit_schematic_background
+    name: "Circuit Schematic, Background and Discussion"
+    weight: 20
+    description: |
+      Important circuit details are described clearly and correctly. For open-ended
+      projects, work shows originality and interest.
+
+    levels:
+      excellent:
+        description: "All important circuit details described perfectly. Highly original and interesting."
+        point_range: [13, 20]
+        indicators:
+          - "All important circuit details present and clear"
+          - "Presentation is perfectly clear and correct"
+          - "Open-ended projects: completely new and original"
+          - "Rich and interesting content"
+      good:
+        description: "Most important details described clearly. Fairly original with some interest."
+        point_range: [7, 12]
+        indicators:
+          - "Most important details present"
+          - "Generally clear and correct presentation"
+          - "Open-ended projects: fairly original"
+          - "Has at least some interest"
+      poor:
+        description: "Important circuit details missing or incorrect. Little originality or interest."
+        point_range: [0, 6]
+        indicators:
+          - "Important details missing or incorrect"
+          - "Presentation unclear or wrong"
+          - "Open-ended projects: not original"
+          - "Little interest or significance"
+
+    keywords: [circuit, schematic, background, diagram, component, design, original]
+    artifacts: ["schematics/*.png", "diagrams/*.jpg", "circuit/*.pdf"]
+    common_issues:
+      - "Component values not labeled on schematic"
+      - "No explanation of how circuit works"
+      - "Missing pin numbers or IC part numbers"
+      - "Schematic not readable or poorly drawn"
+      - "No discussion of design choices"
+
+  - id: circuit_function
+    name: "Circuit Function"
+    weight: 40
+    description: |
+      Circuit is constructed and functions correctly. Schematic and code are readable
+      with documentation. Correct operation validated through measurements and statistics.
+
+    levels:
+      excellent:
+        description: "Circuit functions flawlessly. Schematic/code are excellent. Function quantitatively validated."
+        point_range: [26, 40]
+        indicators:
+          - "Circuit functions flawlessly"
+          - "Schematic and code are works of art - easy to read"
+          - "Sufficient embedded documentation"
+          - "Function validated quantitatively with measurements"
+          - "Statistical analysis used to validate operation"
+      good:
+        description: "Circuit functions almost perfectly. Schematic/code fairly readable. Some validation attempted."
+        point_range: [14, 25]
+        indicators:
+          - "Circuit all there and functions almost perfectly"
+          - "Schematic/code fairly easy to read"
+          - "Some documentation embedded"
+          - "Some attempt at validation with measurements"
+          - "Basic statistical analysis present"
+      poor:
+        description: "Circuit not constructed or not functional. No demonstration of correct operation."
+        point_range: [0, 13]
+        indicators:
+          - "Circuit not constructed or not functional"
+          - "No demonstration of correct operation"
+          - "Schematic/code difficult to understand"
+          - "Minimal or no documentation"
+          - "No validation measurements"
+
+    keywords: [circuit, function, operation, test, measurement, validate, code, schematic]
+    artifacts: ["photos/*.jpg", "data/*.csv", "code/*.ino", "code/*.py", "schematics/*.png"]
+    common_issues:
+      - "No photos showing physical circuit construction"
+      - "Circuit built but not tested/validated"
+      - "No code comments or documentation"
+      - "Missing test measurements to prove functionality"
+      - "Statistical analysis not performed"
+      - "Code works but is unreadable"
+
+  - id: results
+    name: "Results (including stats exercises)"
+    weight: 20
+    description: |
+      Results are complete with correct units and formulas. Valid interpretation showing
+      understanding. Clear graphical representations with labels. Statistical exercises correct.
+
+    levels:
+      excellent:
+        description: "Complete results with perfect interpretation. Clear graphs with labels. All stats exercises correct."
+        point_range: [13, 20]
+        indicators:
+          - "Results present and complete"
+          - "Units clearly given and correct"
+          - "Perfect understanding of physical system and techniques"
+          - "Clear, understandable graphs with axis labels"
+          - "Formulas provided where appropriate"
+          - "All statistical exercises present and correct"
+      good:
+        description: "Mostly complete results with reasonable interpretation. Graphs fairly clear. Most stats correct."
+        point_range: [7, 12]
+        indicators:
+          - "Results present and mostly complete"
+          - "Units given and correct"
+          - "Shows significant understanding"
+          - "Graphs fairly clear and understandable"
+          - "Most statistical exercises correct"
+      poor:
+        description: "Results missing or incomplete. Invalid interpretation. Graphs missing or unclear. Few stats correct."
+        point_range: [0, 6]
+        indicators:
+          - "Results missing or seriously incomplete"
+          - "No interpretation or invalid interpretation"
+          - "Units incorrect or missing"
+          - "Graphs missing or indecipherable"
+          - "No formulas or incorrect formulas"
+          - "Few or no statistical exercises correct"
+
+    keywords: [results, data, graph, plot, units, statistics, mean, standard deviation, uncertainty]
+    artifacts: ["figures/*.png", "data/*.csv", "plots/*.jpg"]
+    common_issues:
+      - "Missing axis labels or units on graphs"
+      - "Results stated without units"
+      - "No interpretation or discussion of results"
+      - "Graphs present but not referenced in text"
+      - "Statistical exercises incomplete or incorrect"
+      - "No comparison to theoretical predictions"
+      - "Results not formatted in tables where appropriate"
+
+  - id: conclusion
+    name: "Conclusion"
+    weight: 10
+    description: |
+      Conclusion is present and complete, with final result clearly stated and
+      uncertainty estimates included.
+
+    levels:
+      excellent:
+        description: "Complete conclusion with clear final result and uncertainty estimates."
+        point_range: [7, 10]
+        indicators:
+          - "Conclusion present and complete"
+          - "Final result stated clearly"
+          - "Uncertainty estimates included"
+          - "Results connected to objectives"
+      good:
+        description: "Conclusion present and reasonably complete. Final result stated clearly."
+        point_range: [4, 6]
+        indicators:
+          - "Conclusion present and reasonably complete"
+          - "Final result stated clearly"
+          - "May lack uncertainty discussion"
+      poor:
+        description: "Conclusion missing or seriously incomplete."
+        point_range: [0, 3]
+        indicators:
+          - "Conclusion missing or very brief"
+          - "Final result not stated clearly"
+          - "No connection to project goals"
+
+    keywords: [conclusion, result, summary, uncertainty, estimate, findings]
+    common_issues:
+      - "Conclusion just repeats results without interpretation"
+      - "No uncertainty or error discussion"
+      - "Doesn't connect back to objectives"
+      - "Missing or extremely brief"
+      - "No reflection on what was learned"

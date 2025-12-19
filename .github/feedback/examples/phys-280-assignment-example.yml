@@ -1,0 +1,221 @@
+# PHYS/ENGR 280 - Scientific Computing Example Rubric
+# Focus: Numerical methods, algorithms, Python programming, computational physics
+
+assignment:
+  name: "Assignment"
+  course: "PHYS/ENGR 280"
+  type: "assignment"
+  total_points: 100
+
+criteria:
+  - id: abstract_description
+    name: "Abstract & Description"
+    weight: 10
+    description: |
+      Abstract clearly and concisely states the project idea, results, and accuracy.
+      Description explains the significance of the project.
+
+    levels:
+      excellent:
+        description: "Abstract is clear and concise with accuracy indication. Description clearly conveys significance."
+        point_range: [7, 10]
+        indicators:
+          - "Project idea stated absolutely clearly"
+          - "Results stated with accuracy indication"
+          - "Significance of project well explained"
+      good:
+        description: "Abstract present with basic merit. Description gives some idea of significance."
+        point_range: [4, 6]
+        indicators:
+          - "Basic idea of project is stated"
+          - "Result is stated"
+          - "Description present and gives some idea of significance"
+      poor:
+        description: "Abstract missing or lacks substantial merit. Description missing or unclear."
+        point_range: [0, 3]
+        indicators:
+          - "Project idea not clearly stated"
+          - "Result missing or stated unclearly"
+          - "Description missing or doesn't convey significance"
+
+    keywords: [abstract, description, significance, result, accuracy, purpose]
+    common_issues:
+      - "Abstract too vague or overly technical"
+      - "Results stated without accuracy or convergence discussion"
+      - "Significance of computational approach not explained"
+      - "Missing connection to physical problem"
+
+  - id: algorithm_discussion
+    name: "Algorithm & Discussion"
+    weight: 20
+    description: |
+      Important details of the algorithm are described clearly and correctly.
+      Mathematical foundations and implementation approach are explained.
+
+    levels:
+      excellent:
+        description: "All important algorithm details perfectly clear and completely correct."
+        point_range: [13, 20]
+        indicators:
+          - "All important algorithm details present"
+          - "Presentation is perfectly clear"
+          - "Completely correct description"
+          - "Mathematical foundations explained"
+          - "Algorithm complexity discussed"
+      good:
+        description: "Most important algorithm details described clearly and correctly."
+        point_range: [7, 12]
+        indicators:
+          - "Most important details present"
+          - "Generally clear and correct presentation"
+          - "Basic understanding demonstrated"
+      poor:
+        description: "Important algorithm details missing or incorrect."
+        point_range: [0, 6]
+        indicators:
+          - "Important details missing or incorrect"
+          - "Presentation unclear or wrong"
+          - "Limited understanding of algorithm"
+
+    keywords: [algorithm, method, numerical, approach, iteration, convergence, complexity]
+    common_issues:
+      - "Algorithm described but not explained (just lists steps)"
+      - "No discussion of why this algorithm was chosen"
+      - "Mathematical foundations not explained"
+      - "Convergence criteria not discussed"
+      - "Algorithm limitations not mentioned"
+      - "No pseudocode or mathematical formulation"
+
+  - id: implementation_code
+    name: "Implementation/Code"
+    weight: 40
+    description: |
+      Code is complete and functional. Easy to read and understand with embedded
+      documentation. Correctness validated using special cases or analytical results.
+
+    levels:
+      excellent:
+        description: "Code functions flawlessly. Easy to read and understand. Well documented. Correctness validated."
+        point_range: [26, 40]
+        indicators:
+          - "Code all there and functions flawlessly"
+          - "Code is easy to read and understand"
+          - "Sufficient embedded documentation"
+          - "Code correctness validated (special case or analytical result)"
+          - "Follows best practices (PEP8, naming conventions)"
+      good:
+        description: "Code functions almost perfectly. Fairly easy to read. Some documentation. Validation attempted."
+        point_range: [14, 25]
+        indicators:
+          - "Code all there and functions almost perfectly"
+          - "Fairly easy to read and understand"
+          - "Some documentation embedded"
+          - "At least some attempt to validate correct operation"
+      poor:
+        description: "Code missing or not functional. Nothing done to demonstrate correct operation."
+        point_range: [0, 13]
+        indicators:
+          - "Code missing or not functional"
+          - "No demonstration of correct operation"
+          - "Difficult to read or understand"
+          - "Minimal or no documentation"
+
+    keywords: [code, implementation, function, NumPy, matplotlib, validation, test]
+    artifacts: ["*.py", "*.ipynb", "code/*.py", "notebooks/*.ipynb"]
+    common_issues:
+      - "No validation against known solution or analytical result"
+      - "Code works but has no comments or docstrings"
+      - "Poor variable names (x, y, arr, temp, data)"
+      - "Not using NumPy vectorization (slow nested loops)"
+      - "No test cases or example usage"
+      - "Magic numbers instead of named constants"
+      - "Functions too long or doing too many things"
+
+  - id: results
+    name: "Results"
+    weight: 20
+    description: |
+      Results are complete with correct units and formulas. Valid interpretation showing
+      understanding of both physical system and computational techniques. Clear graphical
+      representations with labels.
+
+    levels:
+      excellent:
+        description: "Complete results with perfect interpretation. Clear graphs with labels and formulas."
+        point_range: [13, 20]
+        indicators:
+          - "Results present and complete"
+          - "Units clearly given and correct"
+          - "Perfect understanding of physical system and techniques"
+          - "Clear, understandable graphs with axis labels"
+          - "Formulas provided where appropriate"
+          - "Convergence or accuracy analysis performed"
+      good:
+        description: "Mostly complete results with reasonable interpretation. Graphs fairly clear with labels."
+        point_range: [7, 12]
+        indicators:
+          - "Results present and mostly complete"
+          - "Units given and correct"
+          - "Shows significant understanding"
+          - "Graphs fairly clear and mostly understandable"
+          - "Units given with clear axis labels"
+      poor:
+        description: "Results missing or incomplete. Invalid interpretation. Graphs missing or unclear. Units missing."
+        point_range: [0, 6]
+        indicators:
+          - "Results missing or seriously incomplete"
+          - "No interpretation or invalid interpretation"
+          - "Units incorrect or missing"
+          - "Graphs missing or indecipherable"
+          - "No formulas or incorrect formulas"
+
+    keywords: [results, data, graph, plot, units, convergence, accuracy, error, analysis]
+    artifacts: ["figures/*.png", "plots/*.jpg", "*.png"]
+    common_issues:
+      - "Missing axis labels or units on graphs"
+      - "Results stated without units or dimensions"
+      - "No interpretation or discussion of results"
+      - "Graphs present but not referenced in text"
+      - "No convergence test or accuracy analysis"
+      - "No comparison to analytical solution if available"
+      - "Results not formatted clearly (tables or plots)"
+
+  - id: conclusion
+    name: "Conclusion"
+    weight: 10
+    description: |
+      Conclusion is present and complete, with final result clearly stated and
+      uncertainty/accuracy estimate included.
+
+    levels:
+      excellent:
+        description: "Complete conclusion with clear final result and uncertainty estimate."
+        point_range: [7, 10]
+        indicators:
+          - "Conclusion present and complete"
+          - "Final result stated clearly"
+          - "Uncertainty estimate included"
+          - "Results connected to objectives"
+          - "Computational efficiency discussed"
+      good:
+        description: "Conclusion present and reasonably complete. Final result stated clearly."
+        point_range: [4, 6]
+        indicators:
+          - "Conclusion present and reasonably complete"
+          - "Final result stated clearly"
+          - "May lack uncertainty/accuracy discussion"
+      poor:
+        description: "Conclusion missing or seriously incomplete."
+        point_range: [0, 3]
+        indicators:
+          - "Conclusion missing or very brief"
+          - "Final result not stated clearly"
+          - "No connection to project goals"
+
+    keywords: [conclusion, result, summary, uncertainty, accuracy, estimate, findings]
+    common_issues:
+      - "Conclusion just repeats results without interpretation"
+      - "No accuracy or uncertainty discussion"
+      - "Doesn't connect back to objectives or physical problem"
+      - "Missing or extremely brief"
+      - "No reflection on algorithm performance or limitations"
