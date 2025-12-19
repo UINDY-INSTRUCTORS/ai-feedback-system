@@ -1,5 +1,5 @@
 def main():
-    print("Hello from feedback-system-test!")
+    print("Hello from ai-feedback-system!")
 
 
 if __name__ == "__main__":

@@ -94,7 +94,7 @@ lab-1-amplifiers/              # Your assignment repo
 **Copy as-is** (standard across all):
 - `.github/workflows/feedback.yml`
 - `scripts/*.py`
-- `Dockerfile`
+
 
 **Use as reference** (don't edit, copy from):
 - `.github/feedback/templates/*`

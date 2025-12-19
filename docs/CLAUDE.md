@@ -11,7 +11,7 @@ Successfully built and tested a complete AI-powered feedback system for student 
 ### Complete System Components
 
 ```
-feedback-system-test/
+ai-feedback-system/
 ├── .github/
 │   ├── workflows/
 │   │   └── report-feedback.yml          # GitHub Actions workflow
@@ -27,7 +27,7 @@ feedback-system-test/
 │   ├── ai_feedback.py                   # Single-request version (legacy)
 │   ├── ai_feedback_criterion.py         # Criterion-based version ✅ NEW & TESTED
 │   └── create_issue.py                  # GitHub Issue creation
-├── Dockerfile                           # Container for GitHub Actions
+├──                           # Container for GitHub Actions
 ├── README.md                            # Student documentation
 ├── DEPLOYMENT.md                        # Instructor deployment guide
 └── pyproject.toml                       # Python dependencies (uv)
@@ -298,8 +298,8 @@ except ImportError:
 2. **Test end-to-end in a student repo**
    ```bash
    # Copy system to test student repo
-   cp -r feedback-system-test/.github lab-3-submissions/lab-3-test/
-   cp -r feedback-system-test/scripts lab-3-submissions/lab-3-test/
+   cp -r ai-feedback-system/.github lab-3-submissions/lab-3-test/
+   cp -r ai-feedback-system/scripts lab-3-submissions/lab-3-test/
 
    cd lab-3-submissions/lab-3-test/
    git add .github scripts
@@ -425,7 +425,7 @@ Edit these 3 files:
 ### Local Testing
 ```bash
 # Navigate to project
-cd feedback-system-test
+cd ai-feedback-system
 
 # Parse a report
 uv run python scripts/parse_report.py
@@ -520,7 +520,7 @@ export GITHUB_TOKEN="ghp_your_token_here"
 
 ### File Structure
 ```
-feedback-system-test/
+ai-feedback-system/
 ├── Core Scripts (ready)
 │   ├── parse_report.py          ✅ Tested
 │   ├── section_extractor.py     ✅ Tested
@@ -538,7 +538,7 @@ feedback-system-test/
 │   └── CLAUDE.md          ✅ (this file)
 └── Dev Environment (ready)
     ├── .devcontainer/      ✅
-    ├── Dockerfile          ✅
+    ├──          ✅
     └── pyproject.toml      ✅
 ```
 

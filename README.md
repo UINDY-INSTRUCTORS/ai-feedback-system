@@ -20,31 +20,34 @@ This system provides detailed, criterion-based feedback on student work by:
 
 ```bash
 # Copy the feedback system to your GitHub Classroom template
-cp -r feedback-system-test/{.github,scripts,Dockerfile} your-assignment-repo/
+cp -r ai-feedback-system/{.github,scripts} your-assignment-repo/
 cd your-assignment-repo
 ```
 
 ### 2. Customize for Your Assignment
 
 ```bash
-cd .github/feedback
+cd your-assignment-repo/.github/feedback
 
-# Choose a starting point (pick one):
-cp examples/eeng-320-lab-example.yml rubric.yml           # Electronics lab
-cp examples/phys-280-assignment-example.yml rubric.yml    # Scientific computing
-cp examples/phys-230-lab-example.yml rubric.yml           # Instrumentation lab
-cp examples/eeng-340-project-example.yml rubric.yml       # Interfacing/embedded
-# OR
-cp templates/lab-rubric-template.yml rubric.yml           # Generic lab template
+# Option A: Copy from template (recommended for first-time setup)
+cp /path/to/ai-feedback-system/templates/config-template.yml config.yml
+cp /path/to/ai-feedback-system/templates/lab-rubric-template.yml rubric.yml
+cp /path/to/ai-feedback-system/templates/guidance-template.md guidance.md
 
-# Create config
-cp config-template.yml config.yml
-# Edit config.yml: Set assignment name, course, report filename
+# Option B: Copy from a course example (if similar assignment exists)
+cp /path/to/ai-feedback-system/examples/eeng-320-lab-example.yml rubric.yml
+cp /path/to/ai-feedback-system/templates/config-template.yml config.yml
+cp /path/to/ai-feedback-system/templates/guidance-template.md guidance.md
 
-# Create guidance
-cp templates/guidance-template.md guidance.md
-# Edit guidance.md: Add course context, common mistakes, examples
+# Then customize each file:
+# - Edit config.yml: Set assignment name, course, report filename
+# - Edit rubric.yml: Adjust criteria, weights, keywords
+# - Edit guidance.md: Add course context, common mistakes, examples
 ```
+
+**Available:**
+- **Templates** (in `templates/`): Generic starting points
+- **Examples** (in `examples/`): Course-specific examples from EENG-320, PHYS-280, PHYS-230, EENG-340
 
 ### 3. Customize & Test
 
@@ -65,7 +68,7 @@ cat feedback.md  # Review the generated feedback
 ### 4. Deploy to Students
 
 ```bash
-git add .github scripts Dockerfile
+git add .github scripts
 git commit -m "Add AI feedback system"
 git push
 ```
@@ -197,7 +200,6 @@ your-assignment-repo/
     ai_feedback_criterion.py   ← Generate AI feedback
     create_issue.py            ← Post feedback as GitHub Issue
 
-  Dockerfile                   ← Container for GitHub Actions
   index.qmd                    ← Student's report
 ```
 
@@ -287,7 +289,7 @@ cat feedback.md
 
 ```bash
 # Push to test repo
-git add .github scripts Dockerfile
+git add .github scripts
 git commit -m "Test AI feedback system"
 git push
 

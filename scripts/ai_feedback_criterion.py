@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
-Criterion-based AI feedback using GitHub Models API.
-Analyzes each rubric criterion separately for better quality and no truncation.
+Criterion-based AI feedback using GitHub Models API with AI-based section extraction.
 """
 
 import os
@@ -11,7 +10,7 @@ import requests
 import sys
 import concurrent.futures
 from pathlib import Path
-from section_extractor import extract_sections_for_criterion
+from section_extractor import extract_sections_for_criterion_ai
 
 # Load environment variables from .env file if it exists (for local testing)
 try:
@@ -66,21 +65,16 @@ def load_report():
 
 def get_criterion_guidance(guidance: str, criterion: dict) -> str:
     """Extract relevant guidance for this specific criterion."""
-    # For now, return condensed version focusing on this criterion
     criterion_name = criterion['name']
     criterion_id = criterion.get('id', '')
 
-    # Extract relevant parts of guidance
     guidance_lines = []
-
-    # Add general philosophy
     guidance_lines.append("## Feedback Philosophy")
     guidance_lines.append("- Be specific and actionable")
     guidance_lines.append("- Start with strengths before improvements")
     guidance_lines.append("- Reference specific sections, figures, equations")
     guidance_lines.append("- Maintain encouraging, constructive tone\n")
 
-    # Add criterion-specific common mistakes
     if 'common_issues' in criterion:
         guidance_lines.append(f"## Common Issues for '{criterion_name}':")
         for issue in criterion['common_issues']:
@@ -92,263 +86,192 @@ def get_criterion_guidance(guidance: str, criterion: dict) -> str:
 def build_criterion_prompt(report: dict, criterion: dict, guidance_excerpt: str) -> str:
     """Build focused prompt for analyzing one criterion."""
 
-    # Extract relevant sections for this criterion
-    relevant_content = extract_sections_for_criterion(report, criterion)
+    # Extract relevant sections using AI
+    relevant_content = extract_sections_for_criterion_ai(report, criterion, model="gpt-4o-mini")
 
     # Format criterion details
     criterion_text = f"""### {criterion['name']} ({criterion['weight']}%)
 {criterion['description']}
 
-**Performance Levels:**"""
+**Performance Levels:**
+"""
 
-    if 'levels' in criterion:
-        for level_name, level_data in criterion['levels'].items():
-            points = level_data['point_range']
-            criterion_text += f"\n- **{level_name.title()}** ({points[0]}-{points[1]} pts): {level_data['description']}"
+    # Add level descriptions
+    levels = criterion.get('levels', {})
+    for level_name, level_info in levels.items():
+        point_range = level_info.get('point_range', [0, 0])
+        description = level_info.get('description', '')
+        criterion_text += f"- **{level_name.title()}** ({point_range[0]}-{point_range[1]} points): {description}\n"
 
-    if 'keywords' in criterion:
-        criterion_text += f"\n\n**Key concepts**: {', '.join(criterion['keywords'])}"
+    # Build full prompt
+    prompt = f"""You are an expert instructor providing feedback on a student report.
 
-    # Build focused prompt
-    prompt = f"""You are an experienced engineering instructor providing feedback on ONE SPECIFIC CRITERION of a student lab report.
-
-## CRITERION TO ANALYZE
-{criterion_text}
-
-## GUIDANCE FOR THIS CRITERION
 {guidance_excerpt}
 
-## RELEVANT REPORT SECTIONS
+## Your Task
+
+Evaluate the following criterion based on the relevant sections extracted from the student's report:
+
+{criterion_text}
+
+## Report Sections Relevant to This Criterion
+
 {relevant_content}
 
-## YOUR TASK
-Analyze ONLY this criterion. Provide:
+## Your Feedback
 
-1. **Assessment**: Choose performance level (Exemplary/Satisfactory/Developing/Unsatisfactory)
+Provide feedback in this format:
 
-2. **Strengths** (2-4 specific points):
-   - What did the student do well for THIS criterion?
-   - Reference specific sections, figures, or equations
+### {criterion['name']}
+**Assessment**: [Exemplary/Satisfactory/Developing/Unsatisfactory]
 
-3. **Areas for Improvement** (2-4 specific suggestions):
-   - What's missing or could be better?
-   - Give actionable, concrete suggestions
-   - Reference where improvements should go
+**Strengths:**
+- [Specific strength with reference to section/figure/equation]
+- [Another strength]
 
-4. **Suggested Rating**: Recommend points (X/{criterion['weight']} points)
+**Areas for Improvement:**
+- [Specific, actionable suggestion]
+- [Another suggestion with example]
 
-Format as:
-### {criterion['name']} ({criterion['weight']}%)
-**Assessment**: [✅/⚠️/❌] **[Level]**
+**Suggested Rating**: [X/{criterion['weight']} points]
 
-**Strengths**:
-- [specific strength 1]
-- [specific strength 2]
-
-**Areas for Improvement**:
-- [specific actionable suggestion 1]
-- [specific actionable suggestion 2]
-
-**Suggested Rating**: [X]/{criterion['weight']} points
-
-Be specific, constructive, and encouraging. Focus on THIS criterion only."""
+Keep feedback specific, constructive, and reference specific parts of the report.
+"""
 
     return prompt
 
 
-def call_github_models(prompt: str, model: str = "gpt-4o", max_tokens: int = 1500) -> str:
-    """Call GitHub Models API."""
-    token = os.environ.get('GITHUB_TOKEN')
-    if not token:
-        print("ERROR: GITHUB_TOKEN not found in environment")
-        sys.exit(1)
+def analyze_criterion(report: dict, criterion: dict, guidance: str, model: str) -> dict:
+    """Analyze a single criterion and return feedback."""
 
-    headers = {
-        'Authorization': f'Bearer {token}',
-        'Content-Type': 'application/json'
-    }
+    criterion_name = criterion['name']
+    print(f"\n📊 Analyzing: {criterion_name}")
 
-    data = {
-        'model': model,
-        'messages': [
-            {
-                'role': 'system',
-                'content': 'You are an experienced engineering instructor providing focused, constructive feedback.'
-            },
-            {
-                'role': 'user',
-                'content': prompt
-            }
-        ],
-        'max_tokens': max_tokens,
-        'temperature': 0.7
-    }
-
-    try:
-        response = requests.post(
-            f"{API_BASE}/chat/completions",
-            headers=headers,
-            json=data,
-            timeout=120
-        )
-        response.raise_for_status()
-        result = response.json()
-        return result['choices'][0]['message']['content']
-
-    except requests.exceptions.HTTPError as e:
-        print(f"ERROR: HTTP {e.response.status_code}: {e.response.text}")
-        raise
-    except requests.exceptions.RequestException as e:
-        print(f"ERROR: Request failed: {e}")
-        raise
-
-
-def analyze_criterion(report: dict, criterion: dict, guidance: str, config: dict) -> dict:
-    """Analyze a single criterion."""
-    print(f"   Analyzing: {criterion['name']} ({criterion['weight']}%)")
-
-    # Build focused prompt
+    # Build prompt
     guidance_excerpt = get_criterion_guidance(guidance, criterion)
     prompt = build_criterion_prompt(report, criterion, guidance_excerpt)
 
-    # Estimate tokens (rough)
-    estimated_tokens = len(prompt) // 4
-    print(f"      Prompt size: ~{estimated_tokens} tokens")
-
     # Call API
     try:
-        feedback = call_github_models(
-            prompt,
-            model=config['model']['primary'],
-            max_tokens=1500
-        )
-        print(f"      ✅ Complete")
+        feedback = call_github_models_api(prompt, model)
+
+        # Get token count estimate
+        token_count = len(prompt.split()) * 1.3  # Rough estimate
+
         return {
-            'criterion': criterion,
+            'criterion': criterion_name,
             'feedback': feedback,
-            'success': True
+            'success': True,
+            'tokens_estimated': int(token_count)
         }
+
     except Exception as e:
-        print(f"      ❌ Failed: {e}")
+        print(f"   ❌ Failed: {e}")
         return {
-            'criterion': criterion,
-            'feedback': f"Error analyzing this criterion: {str(e)}",
-            'success': False
+            'criterion': criterion_name,
+            'feedback': f"Error analyzing this criterion: {e}",
+            'success': False,
+            'error': str(e)
         }
 
 
-def combine_feedback(results: list, rubric: dict, report: dict) -> str:
-    """Combine individual criterion feedback into complete report."""
+def call_github_models_api(prompt: str, model: str) -> str:
+    """Call GitHub Models API with a prompt."""
 
-    sections = []
+    token = os.environ.get('GITHUB_TOKEN')
+    if not token:
+        raise ValueError("GITHUB_TOKEN environment variable not set")
 
-    # Header
-    assignment_info = rubric.get('assignment', {})
-    course = assignment_info.get('course', 'Course')
-    assignment_name = assignment_info.get('name', 'Assignment')
-    sections.append(f"# AI Feedback Report\n")
-    sections.append(f"**Course**: {course}  \n")
-    sections.append(f"**Assignment**: {assignment_name}\n\n")
+    endpoint = f"{API_BASE}/chat/completions"
 
-    # Criterion feedback
-    sections.append("## Detailed Feedback by Criterion\n")
-    for i, result in enumerate(results, 1):
-        sections.append(f"{i}. {result['feedback']}\n")
-        sections.append("---\n")
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {token}"
+    }
 
-    # Overall summary
-    sections.append("## Overall Assessment\n")
-    successful = [r for r in results if r['success']]
-    failed = [r for r in results if not r['success']]
+    payload = {
+        "model": model,
+        "messages": [
+            {
+                "role": "system",
+                "content": "You are an expert instructor providing constructive, specific feedback on student technical reports."
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ],
+        "temperature": 0.7,
+        "max_tokens": 2000
+    }
 
-    sections.append(f"**Criteria Analyzed**: {len(successful)}/{len(results)}\n")
+    response = requests.post(endpoint, headers=headers, json=payload)
+    response.raise_for_status()
 
-    if failed:
-        sections.append(f"**Note**: {len(failed)} criteria could not be analyzed due to errors.\n")
+    result = response.json()
+    feedback = result['choices'][0]['message']['content']
 
-    # Add summary statistics
-    sections.append(f"\n**Report Statistics**:")
-    sections.append(f"- Words: {report['stats']['word_count']}")
-    sections.append(f"- Code blocks: {report['stats']['code_blocks']}")
-    sections.append(f"- Equations: {report['stats']['equations']}")
-    sections.append(f"- Figures: {report['stats']['figures']}")
-    sections.append(f"- Sections: {report['stats']['sections']}\n")
+    # Print token usage
+    usage = result.get('usage', {})
+    print(f"   ✅ Tokens: {usage.get('total_tokens', 0)} (prompt: {usage.get('prompt_tokens', 0)}, completion: {usage.get('completion_tokens', 0)})")
 
-    # Encouragement
-    sections.append("---\n")
-    sections.append("### Final Note\n")
-    sections.append("This feedback was generated by analyzing each rubric criterion individually. ")
-    sections.append("Review the specific suggestions for each criterion and use them to strengthen your report. ")
-    sections.append("Great work on completing this lab!")
-
-    return "\n".join(sections)
+    return feedback
 
 
 def main():
-    """Main execution - criterion-based analysis."""
-    print("🤖 Criterion-Based AI Feedback Generator")
-    print("=" * 60)
+    """Generate AI feedback for all criteria."""
+    print("\n" + "="*60)
+    print("AI Feedback System")
+    print("="*60)
 
-    # Load configuration
-    print("\n📖 Loading configuration...")
+    # Load everything
     config = load_config()
     rubric = load_rubric()
     guidance = load_guidance()
     report = load_report()
 
-    print(f"\n🔧 Configuration:")
-    print(f"   - Model: {config['model']['primary']}")
-    print(f"   - Strategy: Analyze each criterion separately")
+    model = config.get('model', {}).get('primary', 'gpt-4o')
+    print(f"\nUsing model: {model}")
 
-    # Collect criteria to analyze from simplified rubric format
+    # Get criteria
     criteria = rubric.get('criteria', [])
+    print(f"Analyzing {len(criteria)} criteria...\n")
 
-    print(f"\n📊 Found {len(criteria)} criteria to analyze")
-    print(f"   Estimated API calls: {len(criteria)}")
-    print(f"   (Note: Enterprise/Education accounts have 5,000 req/hour limit)")
-    print(f"   (See .github/feedback/GITHUB_MODELS_SETTINGS.md for details)\n")
+    # Analyze each criterion
+    all_feedback = []
+    total_tokens = 0
 
-    # Analyze each criterion in parallel
-    print("🔍 Analyzing criteria in parallel...\n")
-    results = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-        # Create a future for each criterion analysis
-        future_to_criterion = {executor.submit(analyze_criterion, report, c, guidance, config): c for c in criteria}
+    for i, criterion in enumerate(criteria, 1):
+        result = analyze_criterion(report, criterion, guidance, model)
+        all_feedback.append(result)
 
-        for i, future in enumerate(concurrent.futures.as_completed(future_to_criterion), 1):
-            criterion = future_to_criterion[future]
-            try:
-                result = future.result()
-                results.append(result)
-                # The print statement from analyze_criterion handles the output
-            except Exception as exc:
-                print(f"      ❌ Error analyzing {criterion['name']}: {exc}")
-                results.append({
-                    'criterion': criterion,
-                    'feedback': f"Error analyzing this criterion: {str(exc)}",
-                    'success': False
-                })
-    print() # Newline after all criteria are processed
+        if result['success']:
+            total_tokens += result.get('tokens_estimated', 0)
 
-    # Combine results
-    print("\n📝 Combining feedback...")
-    final_feedback = combine_feedback(results, rubric, report)
+    # Combine feedback
+    print("\n" + "="*60)
+    print("COMBINED FEEDBACK")
+    print("="*60 + "\n")
 
-    # Save
-    try:
-        with open('feedback.md', 'w') as f:
-            f.write(final_feedback)
-        print(f"✅ Feedback saved to feedback.md ({len(final_feedback)} characters)")
+    combined = []
+    combined.append(f"# Feedback on {rubric.get('assignment', {}).get('name', 'Report')}\n")
 
-        # Show summary
-        successful = [r for r in results if r['success']]
-        print(f"\n✨ Analysis complete!")
-        print(f"   - {len(successful)}/{len(results)} criteria analyzed successfully")
-        print(f"   - Total feedback length: {len(final_feedback)} characters")
+    for result in all_feedback:
+        if result['success']:
+            combined.append(result['feedback'])
+            combined.append("\n---\n")
 
-    except Exception as e:
-        print(f"ERROR: Failed to save feedback: {e}")
-        sys.exit(1)
+    combined_text = "\n".join(combined)
+    print(combined_text)
+
+    # Save feedback
+    with open('feedback.md', 'w') as f:
+        f.write(combined_text)
+
+    print(f"\n✅ Feedback saved to feedback.md")
+    print(f"📊 Total estimated tokens: {total_tokens}")
+    print(f"📊 Average tokens per criterion: {total_tokens // len(criteria)}")
+    print(f"✅ {len(all_feedback)} criteria analyzed")
 
 
 if __name__ == '__main__':

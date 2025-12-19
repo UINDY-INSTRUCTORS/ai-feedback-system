@@ -14,7 +14,7 @@ A complete AI-powered feedback system for student lab reports with:
 ## Project Structure
 
 ```
-feedback-system-test/
+ai-feedback-system/
 ├── .github/
 │   ├── workflows/
 │   │   └── report-feedback.yml     # GitHub Actions workflow
@@ -28,7 +28,7 @@ feedback-system-test/
 │   ├── parse_report.py             # Extract report structure
 │   ├── ai_feedback.py              # Call GitHub Models API
 │   └── create_issue.py             # Post feedback as issue
-├── Dockerfile                      # Container for GitHub Actions
+├── # Container uses python:3.11-slim image directly
 ├── pyproject.toml                  # Python dependencies (uv)
 ├── README.md                       # Student documentation
 └── DEPLOYMENT.md                   # This file
@@ -71,10 +71,10 @@ Tag pushed → GitHub Actions → Docker Container → Parse Report
 1. **Copy files to template repo**:
    ```bash
    cd your-classroom-template/
-   cp -r feedback-system-test/.github .
-   cp -r feedback-system-test/scripts .
-   cp -r feedback-system-test/.devcontainer .
-   cp feedback-system-test/Dockerfile .
+   cp -r ai-feedback-system/.github .
+   cp -r ai-feedback-system/scripts .
+   cp -r ai-feedback-system/.devcontainer .
+   # Dockerfile no longer needed - workflow uses python:3.11-slim directly
    ```
 
 2. **Update README for students**:
@@ -101,9 +101,9 @@ If you want to test with current students:
 cd lab-N-submissions/lab-N-username/
 
 # Copy feedback system
-cp -r /path/to/feedback-system-test/.github .
-cp -r /path/to/feedback-system-test/scripts .
-cp -r /path/to/feedback-system-test/.devcontainer .
+cp -r /path/to/ai-feedback-system/.github .
+cp -r /path/to/ai-feedback-system/scripts .
+cp -r /path/to/ai-feedback-system/.devcontainer .
 
 # Commit and push
 git add .github scripts .devcontainer
@@ -143,7 +143,7 @@ Edit these three files:
 We've set up a `uv` environment for local testing:
 
 ```bash
-cd feedback-system-test/
+cd ai-feedback-system/
 
 # Parse a report
 uv run python scripts/parse_report.py
@@ -199,7 +199,7 @@ Uses your existing `ghcr.io/202420-phys-230/novnc:3` image:
 If you want a pre-built image with dependencies:
 
 ```bash
-cd feedback-system-test/
+cd ai-feedback-system/
 
 # Build
 docker build -t eeng320-feedback:latest .

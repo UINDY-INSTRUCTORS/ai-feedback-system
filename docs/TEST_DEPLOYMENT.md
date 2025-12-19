@@ -13,16 +13,16 @@ Pick one of these for testing:
 
 ### 2. Copy System Files
 
-From `feedback-system-test/`, copy to your test repo:
+From `ai-feedback-system/`, copy to your test repo:
 
 ```bash
 # Navigate to test repo
 cd /path/to/test-repo
 
 # Copy feedback system files
-cp -r /path/to/feedback-system-test/.github .
-cp -r /path/to/feedback-system-test/scripts scripts/
-cp /path/to/feedback-system-test/Dockerfile .
+cp -r /path/to/ai-feedback-system/.github .
+cp -r /path/to/ai-feedback-system/scripts scripts/
+# Dockerfile no longer needed - workflow uses python:3.11-slim directly
 ```
 
 ### 3. Customize for This Assignment
@@ -37,7 +37,7 @@ Edit `.github/feedback/`:
 ### 4. Commit and Push
 
 ```bash
-git add .github scripts Dockerfile
+git add .github scripts
 git commit -m "Add AI feedback system"
 git push
 ```
@@ -123,7 +123,7 @@ Once complete:
 - Common issues:
   - Missing `index.qmd` (check `config.yml` for correct filename)
   - Invalid YAML in rubric/config
-  - Python dependency issues (check Dockerfile)
+  - Python dependency issues (check)
 
 ### No issue created
 - Check if workflow completed successfully
@@ -146,12 +146,12 @@ Once complete:
 cd /Users/steve/Development/courses/eeng/eeng340/202420/repos/p1-curve-tracer-submissions/p1-curve-tracer-irfultz
 
 # Copy feedback system (already configured for this assignment!)
-cp -r /Users/steve/Development/courses/eeng/eeng320/202510/repos/feedback-system-test/.github .
-cp -r /Users/steve/Development/courses/eeng/eeng320/202510/repos/feedback-system-test/scripts scripts/
-cp /Users/steve/Development/courses/eeng/eeng320/202510/repos/feedback-system-test/Dockerfile .
+cp -r /Users/steve/Development/courses/eeng/eeng320/202510/repos/ai-feedback-system/.github .
+cp -r /Users/steve/Development/courses/eeng/eeng320/202510/repos/ai-feedback-system/scripts scripts/
+# Dockerfile no longer needed - workflow uses python:3.11-slim directly
 
 # Commit and test
-git add .github scripts Dockerfile
+git add .github scripts
 git commit -m "Test AI feedback system"
 git push
 
@@ -169,7 +169,7 @@ git push origin feedback-test
 cd /Users/steve/Development/courses/ph-misc/ph280/202320/repos/[some-submission]
 
 # Copy system
-cp -r /path/to/feedback-system-test/{.github,scripts,Dockerfile} .
+cp -r /path/to/ai-feedback-system/{.github,scripts} .
 
 # Update config
 cd .github/feedback
@@ -211,8 +211,8 @@ cd .github/feedback
 - ✅ `scripts/section_extractor.py`
 - ✅ `scripts/ai_feedback_criterion.py`
 - ✅ `scripts/create_issue.py`
-- ✅ `Dockerfile`
 
-All these files are in `feedback-system-test/` and ready to copy!
+
+All these files are in `ai-feedback-system/` and ready to copy!
 
 **Next step**: Choose a test repo and deploy!

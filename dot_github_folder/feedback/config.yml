@@ -1,0 +1,22 @@
+# AI Feedback Configuration
+# CUSTOMIZE THIS FILE FOR YOUR ASSIGNMENT
+#
+# Copy a template from: ../../templates/config-template.yml
+# Or start with these minimal settings:
+
+assignment:
+  name: "YOUR ASSIGNMENT NAME"  # e.g., "Lab 1: Amplifier Design"
+  course: "YOUR COURSE"         # e.g., "EENG 320"
+  type: "lab"                   # lab, project, assignment
+
+report:
+  filename: "index.qmd"         # Student report filename
+  format: "quarto"              # quarto, markdown, jupyter
+
+model:
+  primary: "gpt-4o"
+  fallback: "gpt-4o-mini"
+
+issue:
+  enabled: true
+  label: "ai-feedback"

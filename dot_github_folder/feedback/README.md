@@ -4,42 +4,41 @@ This directory contains the configuration for AI-powered feedback on student rep
 
 ## Quick Setup (3 Steps)
 
-### 1. Choose Your Starting Point
+### 1. Customize Configuration Files
 
-Pick the appropriate rubric for your assignment type:
+The three files in this directory (`config.yml`, `rubric.yml`, `guidance.md`) are minimal placeholders.
 
-**From Examples** (course-specific):
+**Option A: Copy from ai-feedback-system Templates**
 ```bash
-# For electronics lab
-cp examples/eeng-320-lab-example.yml rubric.yml
-
-# For scientific computing assignment
-cp examples/phys-280-assignment-example.yml rubric.yml
-
-# For instrumentation lab
-cp examples/phys-230-lab-example.yml rubric.yml
-
-# For interfacing/embedded project
-cp examples/eeng-340-project-example.yml rubric.yml
+# From the ai-feedback-system repository root, copy templates:
+cp ../../templates/config-template.yml config.yml
+cp ../../templates/lab-rubric-template.yml rubric.yml
+cp ../../templates/guidance-template.md guidance.md
 ```
 
-**From Templates** (generic):
+**Option B: Copy from ai-feedback-system Examples**
 ```bash
-# For any lab assignment
-cp templates/lab-rubric-template.yml rubric.yml
+# Copy a course-specific example:
+cp ../../examples/eeng-320-lab-example.yml rubric.yml
 
-# For programming assignment
-cp templates/programming-assignment-rubric-template.yml rubric.yml
-
-# For guidance
-cp templates/guidance-template.md guidance.md
+# Then copy config and guidance templates:
+cp ../../templates/config-template.yml config.yml
+cp ../../templates/guidance-template.md guidance.md
 ```
 
-### 2. Create Config File
+**Available Templates** (in `ai-feedback-system/templates/`):
+- `lab-rubric-template.yml` - Generic lab assignment
+- `programming-assignment-rubric-template.yml` - Programming/coding assignment
+- `guidance-template.md` - Feedback guidance
+- `config-template.yml` - System configuration
 
-```bash
-cp config-template.yml config.yml
-```
+**Available Examples** (in `ai-feedback-system/examples/`):
+- `eeng-320-lab-example.yml` - Electronics lab (circuits)
+- `phys-280-assignment-example.yml` - Scientific computing
+- `phys-230-lab-example.yml` - Instrumentation lab
+- `eeng-340-project-example.yml` - Interfacing/embedded systems
+
+### 2. Edit Config File
 
 Edit `config.yml`:
 ```yaml

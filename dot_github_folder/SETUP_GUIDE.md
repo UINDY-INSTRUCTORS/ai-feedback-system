@@ -64,7 +64,38 @@ your-template-repo/
 └── [your assignment files]
 ```
 
-### 3.2 Configure GitHub Classroom
+### 3.2 Customize Rubric Files
+
+**Option 1: Start from Template** (Recommended for first-time use)
+```bash
+cd your-template-repo/.github/feedback/
+
+# Copy templates from ai-feedback-system repo:
+cp /path/to/ai-feedback-system/templates/config-template.yml config.yml
+cp /path/to/ai-feedback-system/templates/lab-rubric-template.yml rubric.yml
+cp /path/to/ai-feedback-system/templates/guidance-template.md guidance.md
+
+# Then edit each file for your specific assignment
+```
+
+**Option 2: Start from Course Example** (If similar assignment exists)
+```bash
+# Copy course-specific example:
+cp /path/to/ai-feedback-system/examples/eeng-320-lab-example.yml .github/feedback/rubric.yml
+
+# Copy generic config and guidance:
+cp /path/to/ai-feedback-system/templates/config-template.yml .github/feedback/config.yml
+cp /path/to/ai-feedback-system/templates/guidance-template.md .github/feedback/guidance.md
+```
+
+**What to customize:**
+- `config.yml`: Assignment name, course code, report filename
+- `rubric.yml`: Criteria, weights, keywords, performance levels
+- `guidance.md`: Course context, common mistakes, feedback philosophy
+
+💡 **Tip:** The placeholder files in `.github/feedback/` have links to all templates and examples at the top.
+
+### 3.3 Configure GitHub Classroom
 
 1. Create new assignment in GitHub Classroom
 2. Select your template repository
@@ -73,7 +104,7 @@ your-template-repo/
    - ✅ **Enable feedback pull requests**: Optional
    - ✅ **Deadline**: Set your due date
 
-### 3.3 Test with Pilot Students
+### 3.4 Test with Pilot Students
 
 Before rolling out to entire class:
 1. Invite 2-3 students to test

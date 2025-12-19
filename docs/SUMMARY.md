@@ -150,7 +150,7 @@ Four complete examples:
 
 1. **Copy to your assignment repo**:
    ```bash
-   cp -r feedback-system-test/{.github,scripts,Dockerfile} your-assignment-repo/
+   cp -r ai-feedback-system/{.github,scripts} your-assignment-repo/
    ```
 
 2. **Customize rubric**:
@@ -168,7 +168,7 @@ Four complete examples:
 
 4. **Deploy and test**:
    ```bash
-   git add .github scripts Dockerfile
+   git add .github scripts
    git commit -m "Add AI feedback system"
    git push
    git tag feedback-test
@@ -271,7 +271,6 @@ scripts/
   ai_feedback_criterion.py
   create_issue.py
 
-Dockerfile
 ```
 
 ### Reference Files (use as starting points)
@@ -338,13 +337,13 @@ Dockerfile
 
 **Next Step**: Copy to a real GitHub repo and test with GitHub Actions.
 
-**Location**: `/Users/steve/Development/courses/eeng/eeng320/202510/repos/feedback-system-test/`
+**Location**: `/Users/steve/Development/courses/eeng/eeng320/202510/repos/ai-feedback-system/`
 
 **Test Command** (see TEST_DEPLOYMENT.md):
 ```bash
 cd [test-repo]
-cp -r [feedback-system-test]/{.github,scripts,Dockerfile} .
-git add .github scripts Dockerfile
+cp -r [ai-feedback-system]/{.github,scripts} .
+git add .github scripts
 git commit -m "Test AI feedback system"
 git push
 git tag feedback-test
