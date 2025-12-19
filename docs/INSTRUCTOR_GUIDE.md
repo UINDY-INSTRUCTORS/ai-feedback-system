@@ -20,9 +20,10 @@ This system provides automated, criterion-based AI feedback on student lab repor
 
 ```bash
 # In your GitHub Classroom assignment template repo:
-cp -r ai-feedback-system/.github/feedback .github/
+# Copy and rename dot_github_folder to .github
+cp -r ai-feedback-system/dot_github_folder .github
 cp -r ai-feedback-system/scripts scripts/
-# Dockerfile no longer needed - workflow uses python:3.11-slim directly
+# Note: Dockerfile no longer needed - workflow uses python:3.11-slim directly
 ```
 
 ### 2. Customize the Rubric

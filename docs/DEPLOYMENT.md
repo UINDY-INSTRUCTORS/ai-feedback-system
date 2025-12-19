@@ -8,7 +8,6 @@ A complete AI-powered feedback system for student lab reports with:
 ✅ **Rubric-Based Evaluation** - Machine-readable rubric from RUBRICS.md
 ✅ **Automated Workflow** - GitHub Actions triggered by git tags
 ✅ **GitHub Issue Feedback** - Students receive detailed feedback as issues
-✅ **Docker Support** - Consistent environments for Actions and Codespaces
 ✅ **Zero Configuration** - Uses built-in `GITHUB_TOKEN`, no API keys needed
 
 ## Project Structure
@@ -22,8 +21,6 @@ ai-feedback-system/
 │       ├── rubric.yml              # Machine-readable rubric (EENG 320)
 │       ├── guidance.md             # AI instruction manual
 │       └── config.yml              # Technical configuration
-├── .devcontainer/
-│   └── devcontainer.json           # GitHub Codespaces config
 ├── scripts/
 │   ├── parse_report.py             # Extract report structure
 │   ├── ai_feedback.py              # Call GitHub Models API
@@ -71,9 +68,8 @@ Tag pushed → GitHub Actions → Docker Container → Parse Report
 1. **Copy files to template repo**:
    ```bash
    cd your-classroom-template/
-   cp -r ai-feedback-system/.github .
+   cp -r ai-feedback-system/dot_github_folder .github
    cp -r ai-feedback-system/scripts .
-   cp -r ai-feedback-system/.devcontainer .
    # Dockerfile no longer needed - workflow uses python:3.11-slim directly
    ```
 
@@ -101,12 +97,10 @@ If you want to test with current students:
 cd lab-N-submissions/lab-N-username/
 
 # Copy feedback system
-cp -r /path/to/ai-feedback-system/.github .
+cp -r /path/to/ai-feedback-system/dot_github_folder .github
 cp -r /path/to/ai-feedback-system/scripts .
-cp -r /path/to/ai-feedback-system/.devcontainer .
 
 # Commit and push
-git add .github scripts .devcontainer
 git commit -m "Add AI feedback system"
 git push
 
@@ -189,7 +183,6 @@ Workflow uses `python:3.11-slim` container:
 - Includes Python 3.11 + pip
 - Dependencies installed during workflow run
 
-### Student Codespaces (.devcontainer)
 Uses your existing `ghcr.io/202420-phys-230/novnc:3` image:
 - Includes Quarto, Python, Jupyter
 - Adds pyyaml + requests for feedback scripts

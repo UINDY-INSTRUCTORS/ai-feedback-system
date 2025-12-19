@@ -20,7 +20,8 @@ This system provides detailed, criterion-based feedback on student work by:
 
 ```bash
 # Copy the feedback system to your GitHub Classroom template
-cp -r ai-feedback-system/{.github,scripts} your-assignment-repo/
+cp -r ai-feedback-system/dot_github_folder your-assignment-repo/.github
+cp -r ai-feedback-system/scripts your-assignment-repo/
 cd your-assignment-repo
 ```
 
@@ -71,6 +72,8 @@ cat feedback.md  # Review the generated feedback
 git add .github scripts
 git commit -m "Add AI feedback system"
 git push
+
+# Note: The .github directory contains the GitHub Actions workflow and feedback configuration
 ```
 
 Students can now request feedback by tagging their commits!

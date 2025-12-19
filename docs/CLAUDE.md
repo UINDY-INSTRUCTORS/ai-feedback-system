@@ -19,8 +19,6 @@ ai-feedback-system/
 │       ├── rubric.yml                   # EENG 320 rubric (machine-readable)
 │       ├── guidance.md                  # AI instruction manual
 │       └── config.yml                   # Technical configuration
-├── .devcontainer/
-│   └── devcontainer.json                # GitHub Codespaces support
 ├── scripts/
 │   ├── parse_report.py                  # Extract report structure ✅ TESTED
 │   ├── section_extractor.py             # Smart section extraction ✅ NEW
@@ -171,11 +169,6 @@ container:
   image: python:3.11-slim
 ```
 
-**Student Codespaces**: Uses existing `ghcr.io/202420-phys-230/novnc:3` with added dependencies
-```json
-"postCreateCommand": "pip install --user pyyaml requests"
-```
-
 ---
 
 ## Files Created/Modified
@@ -298,7 +291,7 @@ except ImportError:
 2. **Test end-to-end in a student repo**
    ```bash
    # Copy system to test student repo
-   cp -r ai-feedback-system/.github lab-3-submissions/lab-3-test/
+   cp -r ai-feedback-system/dot_github_folder lab-3-submissions/lab-3-test/.github
    cp -r ai-feedback-system/scripts lab-3-submissions/lab-3-test/
 
    cd lab-3-submissions/lab-3-test/
@@ -537,7 +530,6 @@ ai-feedback-system/
 │   ├── DEPLOYMENT.md       ✅
 │   └── CLAUDE.md          ✅ (this file)
 └── Dev Environment (ready)
-    ├── .devcontainer/      ✅
     ├──          ✅
     └── pyproject.toml      ✅
 ```

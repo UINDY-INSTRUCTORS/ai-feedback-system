@@ -20,7 +20,7 @@ From `ai-feedback-system/`, copy to your test repo:
 cd /path/to/test-repo
 
 # Copy feedback system files
-cp -r /path/to/ai-feedback-system/.github .
+cp -r /path/to/ai-feedback-system/dot_github_folder .github
 cp -r /path/to/ai-feedback-system/scripts scripts/
 # Dockerfile no longer needed - workflow uses python:3.11-slim directly
 ```
@@ -146,7 +146,7 @@ Once complete:
 cd /Users/steve/Development/courses/eeng/eeng340/202420/repos/p1-curve-tracer-submissions/p1-curve-tracer-irfultz
 
 # Copy feedback system (already configured for this assignment!)
-cp -r /Users/steve/Development/courses/eeng/eeng320/202510/repos/ai-feedback-system/.github .
+cp -r /path/to/ai-feedback-system/dot_github_folder .github
 cp -r /Users/steve/Development/courses/eeng/eeng320/202510/repos/ai-feedback-system/scripts scripts/
 # Dockerfile no longer needed - workflow uses python:3.11-slim directly
 
@@ -169,7 +169,8 @@ git push origin feedback-test
 cd /Users/steve/Development/courses/ph-misc/ph280/202320/repos/[some-submission]
 
 # Copy system
-cp -r /path/to/ai-feedback-system/{.github,scripts} .
+cp -r /path/to/ai-feedback-system/dot_github_folder .github
+cp -r /path/to/ai-feedback-system/scripts .
 
 # Update config
 cd .github/feedback

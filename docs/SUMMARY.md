@@ -150,7 +150,8 @@ Four complete examples:
 
 1. **Copy to your assignment repo**:
    ```bash
-   cp -r ai-feedback-system/{.github,scripts} your-assignment-repo/
+   cp -r ai-feedback-system/dot_github_folder your-assignment-repo/.github
+   cp -r ai-feedback-system/scripts your-assignment-repo/
    ```
 
 2. **Customize rubric**:
@@ -342,7 +343,8 @@ scripts/
 **Test Command** (see TEST_DEPLOYMENT.md):
 ```bash
 cd [test-repo]
-cp -r [ai-feedback-system]/{.github,scripts} .
+cp -r [ai-feedback-system]/dot_github_folder .github
+cp -r [ai-feedback-system]/scripts .
 git add .github scripts
 git commit -m "Test AI feedback system"
 git push
