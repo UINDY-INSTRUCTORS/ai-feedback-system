@@ -35,7 +35,7 @@ assignment-repo/
     workflows/
       report-feedback.yml   # GitHub Actions workflow
 
-  scripts/
+ /
     parse_report.py
     section_extractor.py
     ai_feedback_criterion.py   # ← Updated for new format!
@@ -151,7 +151,7 @@ Four complete examples:
 1. **Copy to your assignment repo**:
    ```bash
    cp -r ai-feedback-system/dot_github_folder your-assignment-repo/.github
-   cp -r ai-feedback-system/scripts your-assignment-repo/
+   
    ```
 
 2. **Customize rubric**:
@@ -169,7 +169,7 @@ Four complete examples:
 
 4. **Deploy and test**:
    ```bash
-   git add .github scripts
+   git add .github
    git commit -m "Add AI feedback system"
    git push
    git tag feedback-test
@@ -345,7 +345,7 @@ scripts/
 cd [test-repo]
 cp -r [ai-feedback-system]/dot_github_folder .github
 cp -r [ai-feedback-system]/scripts .
-git add .github scripts
+git add .github
 git commit -m "Test AI feedback system"
 git push
 git tag feedback-test

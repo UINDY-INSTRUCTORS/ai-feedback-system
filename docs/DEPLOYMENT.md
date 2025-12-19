@@ -21,7 +21,7 @@ ai-feedback-system/
 │       ├── rubric.yml              # Machine-readable rubric (EENG 320)
 │       ├── guidance.md             # AI instruction manual
 │       └── config.yml              # Technical configuration
-├── scripts/
+├──/
 │   ├── parse_report.py             # Extract report structure
 │   ├── ai_feedback.py              # Call GitHub Models API
 │   └── create_issue.py             # Post feedback as issue
@@ -69,7 +69,7 @@ Tag pushed → GitHub Actions → Docker Container → Parse Report
    ```bash
    cd your-classroom-template/
    cp -r ai-feedback-system/dot_github_folder .github
-   cp -r ai-feedback-system/scripts .
+   
    # Dockerfile no longer needed - workflow uses python:3.11-slim directly
    ```
 
@@ -98,7 +98,7 @@ cd lab-N-submissions/lab-N-username/
 
 # Copy feedback system
 cp -r /path/to/ai-feedback-system/dot_github_folder .github
-cp -r /path/to/ai-feedback-system/scripts .
+
 
 # Commit and push
 git commit -m "Add AI feedback system"
@@ -140,13 +140,13 @@ We've set up a `uv` environment for local testing:
 cd ai-feedback-system/
 
 # Parse a report
-uv run python scripts/parse_report.py
+uv run python .github/scripts/parse_report.py
 
 # Generate AI feedback (requires GITHUB_TOKEN with models access)
 export GITHUB_TOKEN="your-github-token"
-uv run python scripts/ai_feedback.py
+uv run python .github/scripts/ai_feedback.py
 
-# The scripts will create:
+# The will create:
 # - parsed_report.json (report structure)
 # - feedback.md (AI-generated feedback)
 ```
@@ -185,8 +185,8 @@ Workflow uses `python:3.11-slim` container:
 
 Uses your existing `ghcr.io/202420-phys-230/novnc:3` image:
 - Includes Quarto, Python, Jupyter
-- Adds pyyaml + requests for feedback scripts
-- Students can run scripts locally if needed
+- Adds pyyaml + requests for feedback
+- Students can run locally if needed
 
 ### Custom Docker Image (Optional)
 If you want a pre-built image with dependencies:
@@ -293,7 +293,7 @@ Ideas for improvement:
 - [ ] **Plagiarism hints**: Flag suspiciously similar reports
 - [ ] **Cohort analysis**: Weekly summary of common issues
 - [ ] **Gradebook integration**: Auto-populate suggested scores
-- [ ] **Multi-file support**: Analyze Python scripts, data files
+- [ ] **Multi-file support**: Analyze Python, data files
 - [ ] **Comparative feedback**: "Your design is in the top 25%"
 - [ ] **Progressive feedback**: Different criteria for early vs late labs
 - [ ] **LaTeX support**: Parse LaTeX reports, not just Quarto

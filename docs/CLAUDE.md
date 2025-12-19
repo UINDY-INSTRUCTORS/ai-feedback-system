@@ -19,7 +19,7 @@ ai-feedback-system/
 │       ├── rubric.yml                   # EENG 320 rubric (machine-readable)
 │       ├── guidance.md                  # AI instruction manual
 │       └── config.yml                   # Technical configuration
-├── scripts/
+├──/
 │   ├── parse_report.py                  # Extract report structure ✅ TESTED
 │   ├── section_extractor.py             # Smart section extraction ✅ NEW
 │   ├── ai_feedback.py                   # Single-request version (legacy)
@@ -126,10 +126,10 @@ GITHUB_TOKEN=ghp_your_token_here
 uv add pyyaml requests python-dotenv
 
 # Test parsing
-uv run python scripts/parse_report.py
+uv run python .github/scripts/parse_report.py
 
 # Test AI feedback (criterion-based)
-uv run python scripts/ai_feedback_criterion.py
+uv run python .github/scripts/ai_feedback_criterion.py
 ```
 
 **Token Requirements**:
@@ -285,17 +285,17 @@ except ImportError:
    ```yaml
    # In .github/workflows/report-feedback.yml, change:
    - name: Generate AI feedback
-     run: python scripts/ai_feedback_criterion.py  # Use new version
+     run: python/ai_feedback_criterion.py  # Use new version
    ```
 
 2. **Test end-to-end in a student repo**
    ```bash
    # Copy system to test student repo
    cp -r ai-feedback-system/dot_github_folder lab-3-submissions/lab-3-test/.github
-   cp -r ai-feedback-system/scripts lab-3-submissions/lab-3-test/
+   
 
    cd lab-3-submissions/lab-3-test/
-   git add .github scripts
+   git add .github
    git commit -m "Add AI feedback system"
    git push
 
@@ -421,23 +421,23 @@ Edit these 3 files:
 cd ai-feedback-system
 
 # Parse a report
-uv run python scripts/parse_report.py
+uv run python .github/scripts/parse_report.py
 
 # Generate AI feedback (criterion-based)
-uv run python scripts/ai_feedback_criterion.py
+uv run python .github/scripts/ai_feedback_criterion.py
 
 # Create issue (requires GITHUB_REPOSITORY env var)
 GITHUB_REPOSITORY=user/repo TAG_NAME=feedback-v1 \
-  uv run python scripts/create_issue.py
+  uv run python .github/scripts/create_issue.py
 ```
 
 ### Deployment
 ```bash
 # Copy to student repo
-cp -r .github scripts lab-3-submissions/lab-3-student/
+cp -r .github lab-3-submissions/lab-3-student/
 
 # Or add to GitHub Classroom template
-cp -r .github scripts your-template-repo/
+cp -r .github your-template-repo/
 ```
 
 ### GitHub Token Setup

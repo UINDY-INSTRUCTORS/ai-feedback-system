@@ -22,7 +22,7 @@ This system provides automated, criterion-based AI feedback on student lab repor
 # In your GitHub Classroom assignment template repo:
 # Copy and rename dot_github_folder to .github
 cp -r ai-feedback-system/dot_github_folder .github
-cp -r ai-feedback-system/scripts scripts/
+
 # Note: Dockerfile no longer needed - workflow uses python:3.11-slim directly
 ```
 
@@ -75,10 +75,10 @@ cd your-assignment-repo
 export GITHUB_TOKEN="your_token_here"
 
 # Parse a sample student report
-uv run python scripts/parse_report.py
+uv run python .github/scripts/parse_report.py
 
 # Generate AI feedback
-uv run python scripts/ai_feedback_criterion.py
+uv run python .github/scripts/ai_feedback_criterion.py
 
 # Review feedback.md
 cat feedback.md
@@ -134,7 +134,7 @@ your-assignment-repo/
     workflows/
       feedback.yml        ← GitHub Actions workflow (rarely edit)
 
-  scripts/
+ /
     parse_report.py               ← Parses student report
     section_extractor.py          ← Extracts relevant sections per criterion
     ai_feedback_criterion.py      ← Main AI analysis script
@@ -389,11 +389,11 @@ export GITHUB_TOKEN="your_token"
 # 2. Copy a sample student report to your repo as index.qmd
 
 # 3. Test parsing
-uv run python scripts/parse_report.py
+uv run python .github/scripts/parse_report.py
 # Should create parsed_report.json
 
 # 4. Test AI feedback generation
-uv run python scripts/ai_feedback_criterion.py
+uv run python .github/scripts/ai_feedback_criterion.py
 # Should create feedback.md
 
 # 5. Review the feedback

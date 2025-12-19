@@ -26,20 +26,52 @@ jobs:
         with:
           fetch-depth: 0  # Get full history for context
 
+      - name: Validate system integrity
+        run: |
+          echo "🔍 Validating AI feedback system files..."
+
+          REQUIRED_FILES=(
+            ".github/scripts/parse_report.py"
+            ".github/scripts/ai_feedback_criterion.py"
+            ".github/scripts/section_extractor.py"
+            ".github/scripts/create_issue.py"
+            ".github/feedback/config.yml"
+            ".github/feedback/rubric.yml"
+            ".github/feedback/guidance.md"
+          )
+
+          MISSING_FILES=()
+          for file in "${REQUIRED_FILES[@]}"; do
+            if [ ! -f "$file" ]; then
+              MISSING_FILES+=("$file")
+            fi
+          done
+
+          if [ ${#MISSING_FILES[@]} -ne 0 ]; then
+            echo "❌ ERROR: Required feedback system files are missing or modified:"
+            printf '%s\n' "${MISSING_FILES[@]}"
+            echo ""
+            echo "⚠️  DO NOT modify files in the .github/ directory."
+            echo "If you need help, contact your instructor."
+            exit 1
+          fi
+
+          echo "✅ All required files present"
+
       - name: Install dependencies
         run: |
           pip install pyyaml requests
 
       - name: Parse report
         id: parse
-        run: python scripts/parse_report.py
+        run: python .github/scripts/parse_report.py
         continue-on-error: false
 
       - name: Generate AI feedback
         id: feedback
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python scripts/ai_feedback_criterion.py
+        run: python .github/scripts/ai_feedback_criterion.py
         continue-on-error: false
 
       - name: Create feedback issue
@@ -47,7 +79,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG_NAME: ${{ github.ref_name }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-        run: python scripts/create_issue.py
+        run: python .github/scripts/create_issue.py
         continue-on-error: false
 
       - name: Upload artifacts

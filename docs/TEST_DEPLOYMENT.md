@@ -21,7 +21,7 @@ cd /path/to/test-repo
 
 # Copy feedback system files
 cp -r /path/to/ai-feedback-system/dot_github_folder .github
-cp -r /path/to/ai-feedback-system/scripts scripts/
+cp -r /path/to/ai-feedback-system/scripts/
 # Dockerfile no longer needed - workflow uses python:3.11-slim directly
 ```
 
@@ -37,7 +37,7 @@ Edit `.github/feedback/`:
 ### 4. Commit and Push
 
 ```bash
-git add .github scripts
+git add .github
 git commit -m "Add AI feedback system"
 git push
 ```
@@ -147,11 +147,11 @@ cd /Users/steve/Development/courses/eeng/eeng340/202420/repos/p1-curve-tracer-su
 
 # Copy feedback system (already configured for this assignment!)
 cp -r /path/to/ai-feedback-system/dot_github_folder .github
-cp -r /Users/steve/Development/courses/eeng/eeng320/202510/repos/ai-feedback-system/scripts scripts/
+cp -r /Users/steve/Development/courses/eeng/eeng320/202510/repos/ai-feedback-system/scripts/
 # Dockerfile no longer needed - workflow uses python:3.11-slim directly
 
 # Commit and test
-git add .github scripts
+git add .github
 git commit -m "Test AI feedback system"
 git push
 

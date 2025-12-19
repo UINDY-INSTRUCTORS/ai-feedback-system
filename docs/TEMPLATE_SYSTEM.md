@@ -31,8 +31,8 @@ cp .github/feedback/templates/guidance-template.md .github/feedback/guidance.md
 # - Edit config.yml: set assignment name, course, etc.
 
 # Test it
-uv run python scripts/parse_report.py
-uv run python scripts/ai_feedback_criterion.py
+uv run python .github/scripts/parse_report.py
+uv run python .github/scripts/ai_feedback_criterion.py
 ```
 
 ### Option 2: Start from Course Example
@@ -75,7 +75,7 @@ lab-1-amplifiers/              # Your assignment repo
     workflows/
       feedback.yml             # ← Usually don't edit
 
-  scripts/                     # ← Usually don't edit
+ /                     # ← Usually don't edit
     parse_report.py
     section_extractor.py
     ai_feedback_criterion.py
@@ -294,7 +294,7 @@ report:
 
 ```bash
 # Test with a sample report
-uv run python scripts/ai_feedback_criterion.py
+uv run python .github/scripts/ai_feedback_criterion.py
 
 # Review feedback
 cat feedback.md
@@ -346,12 +346,12 @@ If you spend 3 weeks on uncertainty analysis:
 2. **Copy to your repo** as `index.qmd`
 3. **Run parser**:
    ```bash
-   uv run python scripts/parse_report.py
+   uv run python .github/scripts/parse_report.py
    cat parsed_report.json  # Check sections extracted
    ```
 4. **Run AI feedback**:
    ```bash
-   uv run python scripts/ai_feedback_criterion.py
+   uv run python .github/scripts/ai_feedback_criterion.py
    ```
 5. **Review feedback**:
    ```bash

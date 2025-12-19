@@ -20,8 +20,8 @@ This system provides detailed, criterion-based feedback on student work by:
 
 ```bash
 # Copy the feedback system to your GitHub Classroom template
+# (Scripts are included inside dot_github_folder)
 cp -r ai-feedback-system/dot_github_folder your-assignment-repo/.github
-cp -r ai-feedback-system/scripts your-assignment-repo/
 cd your-assignment-repo
 ```
 
@@ -61,19 +61,19 @@ Edit `.github/feedback/rubric.yml`:
 Test locally:
 ```bash
 export GITHUB_TOKEN="your_github_token"
-uv run python scripts/parse_report.py
-uv run python scripts/ai_feedback_criterion.py
+uv run python .github/scripts/parse_report.py
+uv run python .github/scripts/ai_feedback_criterion.py
 cat feedback.md  # Review the generated feedback
 ```
 
 ### 4. Deploy to Students
 
 ```bash
-git add .github scripts
+git add .github
 git commit -m "Add AI feedback system"
 git push
 
-# Note: The .github directory contains the GitHub Actions workflow and feedback configuration
+# Note: The .github directory contains everything: workflows, scripts, and feedback configuration
 ```
 
 Students can now request feedback by tagging their commits!
@@ -196,12 +196,15 @@ your-assignment-repo/
 
     workflows/
       report-feedback.yml      ← GitHub Actions workflow
-
-  scripts/
-    parse_report.py            ← Parse student report
-    section_extractor.py       ← Extract relevant sections per criterion
-    ai_feedback_criterion.py   ← Generate AI feedback
-    create_issue.py            ← Post feedback as GitHub Issue
+    scripts/
+      parse_report.py          ← Parse student report
+      section_extractor.py     ← Extract relevant sections
+      ai_feedback_criterion.py ← Generate AI feedback
+      create_issue.py          ← Post feedback as GitHub Issue
+    feedback/
+      rubric.yml               ← Grading criteria
+      guidance.md              ← AI instructions
+      config.yml               ← Configuration
 
   index.qmd                    ← Student's report
 ```
@@ -277,11 +280,11 @@ export GITHUB_TOKEN="your_github_token"
 cd your-assignment-repo
 
 # Test report parsing
-uv run python scripts/parse_report.py
+uv run python .github/scripts/parse_report.py
 # Creates: parsed_report.json
 
 # Test AI feedback generation
-uv run python scripts/ai_feedback_criterion.py
+uv run python .github/scripts/ai_feedback_criterion.py
 # Creates: feedback.md
 
 # Review feedback
@@ -292,7 +295,7 @@ cat feedback.md
 
 ```bash
 # Push to test repo
-git add .github scripts
+git add .github
 git commit -m "Test AI feedback system"
 git push
 
