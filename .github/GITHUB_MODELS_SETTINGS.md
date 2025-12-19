@@ -4,6 +4,27 @@
 
 This feedback system uses the **GitHub Models API** to provide AI-powered analysis of student lab reports. Understanding rate limits and enterprise settings is crucial for deploying this across all students in a course.
 
+## ⚠️ CRITICAL: Workflow Permissions Required
+
+**IMPORTANT**: Every workflow that uses GitHub Models API must include `models: read` in the permissions block.
+
+```yaml
+permissions:
+  contents: read
+  issues: write
+  models: read  # ← REQUIRED for GitHub Models API access
+```
+
+**Without this permission, you will get 401 Unauthorized errors**, even if:
+- GitHub Models is enabled at the organization level
+- The repository has all other correct settings
+- Your personal GitHub token works fine
+
+This permission must be added to **ALL workflows** that call the Models API, including:
+- `report-feedback.yml`
+- `test-extraction-methods.yml`
+- Any custom workflows using AI features
+
 ## GitHub Models Rate Limits
 
 ### Free Tier (Personal Accounts)
@@ -30,7 +51,7 @@ Based on GitHub Enterprise Cloud tier:
 **Location**: Your GitHub Education organization settings
 
 **Required Configuration**:
-1. **Enable GitHub Models API** for your organization
+1. **Enable GitHub Models ** for your organization
    - Go to: Organization Settings → Copilot → Models
    - Enable "GitHub Models API"
    - Grant access to specific repositories or all repositories
