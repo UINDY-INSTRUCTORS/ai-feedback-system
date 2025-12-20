@@ -97,6 +97,45 @@ The system automatically analyzes their report and posts feedback as a GitHub Is
 
 ---
 
+## Protecting the Feedback System from Tampering
+
+**Important:** When deployed to student repos, students have write access and could potentially modify or delete the `.github` folder (workflows, scripts, rubrics). To prevent this:
+
+### Recommended: Organization Rulesets (Automatic Protection)
+
+If you're using GitHub Classroom (with an organization), set up organization rulesets once to automatically protect all student repos:
+
+1. Go to your organization Settings → Rules → Rulesets
+2. Create a new branch ruleset:
+   - Name: "Protect AI Feedback System"
+   - Target: All repositories
+   - Branch: `main`
+   - Enable: "Require pull request before merging" (1 approval)
+
+**Result:** Students can push their work normally, but cannot modify the `.github` folder.
+
+**Full setup guide:** See `docs/TAMPER_PROTECTION_SETUP.md`
+
+### Validation Script (Optional but Recommended)
+
+Before final grading, run the validation script to verify no tampering occurred:
+
+```bash
+# Generate expected checksum from your template
+cd ai-feedback-system
+./scripts/validate_repos.sh --generate
+
+# Before grading, validate all student repos
+export GITHUB_CLASSROOM_ORG="your-org-name"
+./scripts/validate_repos.sh
+```
+
+This creates a report showing which repos (if any) have modified `.github` folders.
+
+**For more details:** See `TAMPER_RESISTANCE.md` for the full analysis and alternative approaches.
+
+---
+
 ## System Architecture
 
 ### How It Works

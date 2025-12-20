@@ -78,7 +78,18 @@ git push
 
 Students can now request feedback by tagging their commits!
 
-**See**: [INSTRUCTOR_GUIDE.md](INSTRUCTOR_GUIDE.md) for complete documentation.
+### 5. Protect the System from Tampering (Recommended)
+
+**For GitHub Classroom organizations:** Set up organization rulesets to prevent students from modifying the feedback system:
+
+1. Organization Settings → Rules → Rulesets → New branch ruleset
+2. Configure protection for `.github` folder (see `docs/TAMPER_PROTECTION_SETUP.md`)
+
+This takes ~5 minutes and automatically protects all student repos.
+
+**See**:
+- **Complete setup guide**: [docs/INSTRUCTOR_GUIDE.md](docs/INSTRUCTOR_GUIDE.md)
+- **Tamper protection details**: [docs/TAMPER_PROTECTION_SETUP.md](docs/TAMPER_PROTECTION_SETUP.md)
 
 ---
 

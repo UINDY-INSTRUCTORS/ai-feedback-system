@@ -12,6 +12,72 @@ When the AI feedback system is deployed to student repositories via GitHub Class
 
 ---
 
+## ⭐ RECOMMENDED: Organization Rulesets (Automatic Protection)
+
+### How Organization Rulesets Work
+
+GitHub Organization Rulesets are **repository settings configured at the organization level** that automatically apply to all repositories matching a pattern:
+
+- **Configured once** in organization settings
+- **Applies automatically** to all new repos (no scripts needed!)
+- **Cannot be bypassed** by students with Write access
+- **Instant protection** - active the moment repos are created
+- **Centrally managed** - update rules in one place
+
+**Key insight:** Rulesets are managed at the organization level and require **Admin** access to configure. Once set, **Write** users (students) cannot bypass or disable them.
+
+### Setup (One-Time Configuration)
+
+**Full guide:** See `docs/TAMPER_PROTECTION_SETUP.md`
+
+**Quick setup:**
+
+1. Go to your GitHub Classroom organization Settings
+2. Navigate to **Rules** → **Rulesets**
+3. Click **New ruleset** → **New branch ruleset**
+4. Configure:
+   ```
+   Name: Protect AI Feedback System
+   Enforcement: Active
+   Target: All repositories (or pattern match)
+   Target branch: main
+
+   Branch protections:
+   ☑ Require a pull request before merging
+   Required approvals: 1
+   ☑ Block force pushes
+   ```
+5. Save ruleset
+
+### Effect
+
+- ✅ Students can push regular commits to `main`
+- ✅ Students can create tags (triggers feedback)
+- ✅ Workflows run normally
+- ❌ Students **cannot** push changes to `.github` on `main` branch
+- ❌ Students cannot disable rulesets (requires Admin)
+
+### Pros
+
+- **Zero maintenance** - set once, works forever
+- **Automatic** - applies to all new repos instantly
+- **No timing window** - protection active immediately
+- **True prevention** - not just detection
+- **Can't be bypassed** by students
+- **No scripts needed**
+
+### Cons
+
+- Requires organization admin access to configure
+- Students must use branches/PRs to modify `.github` (which requires instructor review)
+- Not available for personal accounts (organization only)
+
+### Testing
+
+See `docs/TAMPER_PROTECTION_SETUP.md` for detailed testing instructions.
+
+---
+
 ## Option 1: Checksum Validation (Insufficient Alone)
 
 ### Concept
@@ -313,43 +379,66 @@ Test with a second GitHub account to simulate student access, but **use actual G
 
 ## Recommended Implementation
 
-**Combination Approach:**
+**Primary Approach: Organization Rulesets + Validation**
 
-1. **Primary Defense: Branch Protection (Option 3)**
-   - One-time bulk setup after deploying to all student repos
-   - Provides true prevention
-   - Script: `bulk_protect_repos.sh`
+### For Organizations (GitHub Classroom) - RECOMMENDED
 
-2. **Secondary Defense: Instructor-Side Audit (Option 4)**
-   - Run before final grading to catch any edge cases
-   - Script: `validate_repos.sh`
+1. **Primary Defense: Organization Rulesets** ⭐
+   - One-time configuration in organization settings
+   - Automatic protection for all current and future repos
+   - Zero maintenance required
+   - Guide: `docs/TAMPER_PROTECTION_SETUP.md`
 
-3. **Optional: Notification Workflow (Option 2)**
-   - Additional visibility if a student somehow bypasses
+2. **Secondary Defense: Pre-Grading Validation**
+   - Run before final grading to verify integrity
+   - Detects any edge cases or bypasses
+   - Script: `scripts/validate_repos.sh`
+
+3. **Optional: Detection Workflow (Option 2)**
+   - Additional visibility if tampering occurs
+   - Creates issues to alert instructor
    - Low overhead, easy to add
 
-4. **Document the Approach**
-   - Explain to instructors why branch protection matters
-   - Provide clear setup instructions
-   - Include troubleshooting for common issues
+### For Individual Repos (Non-Organization)
+
+If you're not using GitHub Classroom or don't have organization access:
+
+1. **Branch Protection (Option 3)**
+   - Manual setup per repository
+   - Provides same protection as rulesets
+   - GitHub repository Settings → Branches
+
+2. **Validation (Option 4)**
+   - Run validation script before grading
+   - Script: `scripts/validate_repos.sh`
 
 ---
 
-## Next Steps
+## Implementation Checklist
 
-1. ✅ Test with GitHub Classroom using second account
-2. ⏳ Verify student permission levels
-3. ⏳ Confirm branch protection blocks `.github` modifications
-4. ⏳ Confirm workflows still run with Write access
-5. ⏳ Build bulk setup script for instructors
-6. ⏳ Build validation script for pre-grading audit
-7. ⏳ Document in INSTRUCTOR_GUIDE.md
+**For GitHub Classroom Instructors:**
+
+- [ ] Set up organization ruleset (see `docs/TAMPER_PROTECTION_SETUP.md`)
+- [ ] Test ruleset with a student account
+- [ ] Deploy AI feedback system to assignment template
+- [ ] Create assignment in GitHub Classroom
+- [ ] (Optional) Run validation script before grading
+- [ ] Document protection for students in assignment README
+
+**Complete setup time:** ~10 minutes
 
 ---
 
-## Open Questions
+## Questions Answered ✅
 
-- [ ] Do GitHub Classroom repos give students Write or Admin by default?
-- [ ] Can workflows run successfully with only Write access?
-- [ ] Does branch protection interfere with normal student workflow?
-- [ ] Can branch protection be configured via GitHub Classroom settings?
+- ✅ **Do GitHub Classroom repos give students Write or Admin by default?**
+  - Answer: **Write access** (confirmed - students do NOT get Admin)
+
+- ✅ **Can workflows run successfully with only Write access?**
+  - Answer: **Yes** - workflows run fine with Write access
+
+- ✅ **Does branch protection interfere with normal student workflow?**
+  - Answer: **No** - students can push commits and create tags normally
+
+- ✅ **Can branch protection be configured automatically?**
+  - Answer: **Yes** - Organization rulesets apply automatically to all repos
