@@ -12,7 +12,61 @@ When the AI feedback system is deployed to student repositories via GitHub Class
 
 ---
 
-## ⭐ RECOMMENDED: Organization Rulesets (Automatic Protection)
+## ⭐ EASIEST: GitHub Classroom Protected Paths (Built-in Detection)
+
+### GitHub Classroom Has This Built In!
+
+**GitHub Classroom includes a "Protected file paths" feature** that makes tamper detection simple:
+
+- Specify `.github/**/*` as a protected path when creating assignment
+- Students **can** push changes (won't block them)
+- GitHub Classroom **automatically labels** submissions that modify protected files
+- Instructor sees "Protected file(s) modified" label on assignment dashboard
+- Acts as deterrent and provides easy visibility
+
+### Setup (30 Seconds)
+
+When creating assignment in GitHub Classroom:
+1. Find **"Protected file paths"** section in assignment creation form
+2. Add pattern: `.github/**/*`
+3. Save and create assignment
+
+**That's it!** No additional configuration needed.
+
+### Effect
+
+- ✅ Students can push commits normally
+- ✅ Students can create tags (triggers feedback)
+- ✅ Workflows run normally
+- ✅ Modifications to `.github` are **flagged** on dashboard
+- ✅ Easy to review which students modified protected files
+
+### Pros
+
+- **Zero setup overhead** - built into GitHub Classroom
+- **Easy visibility** - dashboard shows labeled submissions at a glance
+- **No maintenance** - works automatically
+- **Students can fix mistakes** - can push reverts if needed
+- **Per-assignment** - configure as needed for each assignment
+
+### Cons
+
+- **Detection only** - doesn't prevent modifications
+- **Requires review** - instructor must check dashboard
+- Students might not realize files are monitored until grading
+
+### When to Use
+
+- **Most educational contexts** - sufficient for typical academic integrity
+- You want the simplest possible solution
+- Detection/deterrence is adequate for your needs
+- You review assignment dashboard before grading
+
+**Full guide:** See `docs/TAMPER_PROTECTION_SETUP.md` for complete instructions and comparison.
+
+---
+
+## MAXIMUM PROTECTION: Organization Rulesets (Automatic Prevention)
 
 ### How Organization Rulesets Work
 
@@ -379,36 +433,38 @@ Test with a second GitHub account to simulate student access, but **use actual G
 
 ## Recommended Implementation
 
-**Primary Approach: Organization Rulesets + Validation**
+### For GitHub Classroom (Most Common) - SIMPLE APPROACH ⭐
 
-### For Organizations (GitHub Classroom) - RECOMMENDED
+**Primary: GitHub Classroom Protected Paths** (30 seconds per assignment)
+1. When creating assignment, set protected path: `.github/**/*`
+2. Before grading: Check dashboard for "Protected file(s) modified" labels
+3. (Optional) Run validation script for double-check: `scripts/validate_repos.sh`
 
-1. **Primary Defense: Organization Rulesets** ⭐
-   - One-time configuration in organization settings
-   - Automatic protection for all current and future repos
-   - Zero maintenance required
+**This is sufficient for most educational contexts.**
+
+### For High-Stakes Scenarios - MAXIMUM PROTECTION
+
+If you need absolute prevention (not just detection):
+
+1. **Primary Defense: Organization Rulesets**
+   - One-time configuration in organization settings (~10 minutes)
+   - Blocks students from pushing `.github` changes
    - Guide: `docs/TAMPER_PROTECTION_SETUP.md`
 
 2. **Secondary Defense: Pre-Grading Validation**
    - Run before final grading to verify integrity
-   - Detects any edge cases or bypasses
    - Script: `scripts/validate_repos.sh`
 
-3. **Optional: Detection Workflow (Option 2)**
-   - Additional visibility if tampering occurs
-   - Creates issues to alert instructor
-   - Low overhead, easy to add
+### For Individual Repos (Non-GitHub Classroom)
 
-### For Individual Repos (Non-Organization)
+If not using GitHub Classroom:
 
-If you're not using GitHub Classroom or don't have organization access:
-
-1. **Branch Protection (Option 3)**
-   - Manual setup per repository
-   - Provides same protection as rulesets
+1. **Repository-Level Branch Protection**
+   - Manual setup per repository (or use bulk script)
    - GitHub repository Settings → Branches
+   - Script for bulk: `scripts/setup_branch_protection.sh`
 
-2. **Validation (Option 4)**
+2. **Validation Before Grading**
    - Run validation script before grading
    - Script: `scripts/validate_repos.sh`
 
@@ -416,7 +472,22 @@ If you're not using GitHub Classroom or don't have organization access:
 
 ## Implementation Checklist
 
+### Simple Approach (Recommended for Most)
+
 **For GitHub Classroom Instructors:**
+
+- [ ] Deploy AI feedback system to assignment template
+- [ ] Create assignment in GitHub Classroom
+- [ ] Set protected path: `.github/**/*` (in assignment settings)
+- [ ] Before grading: Check dashboard for "Protected file(s) modified" labels
+- [ ] (Optional) Run validation script for verification
+- [ ] Document for students in assignment README
+
+**Complete setup time:** 30 seconds per assignment
+
+### Maximum Protection (Optional)
+
+**For instructors who need prevention:**
 
 - [ ] Set up organization ruleset (see `docs/TAMPER_PROTECTION_SETUP.md`)
 - [ ] Test ruleset with a student account
@@ -425,7 +496,7 @@ If you're not using GitHub Classroom or don't have organization access:
 - [ ] (Optional) Run validation script before grading
 - [ ] Document protection for students in assignment README
 
-**Complete setup time:** ~10 minutes
+**Complete setup time:** ~10 minutes (one-time for all assignments)
 
 ---
 

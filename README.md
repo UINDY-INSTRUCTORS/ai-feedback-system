@@ -78,18 +78,19 @@ git push
 
 Students can now request feedback by tagging their commits!
 
-### 5. Protect the System from Tampering (Recommended)
+### 5. Protect the System from Tampering (30 Seconds)
 
-**For GitHub Classroom organizations:** Set up organization rulesets to prevent students from modifying the feedback system:
+**GitHub Classroom has a built-in feature for this!** When creating your assignment:
 
-1. Organization Settings → Rules → Rulesets → New branch ruleset
-2. Configure protection for `.github` folder (see `docs/TAMPER_PROTECTION_SETUP.md`)
+1. Find **"Protected file paths"** in the assignment creation form
+2. Add pattern: `.github/**/*`
+3. Done! Submissions that modify these files will be labeled on your dashboard
 
-This takes ~5 minutes and automatically protects all student repos.
+**For maximum protection:** See [docs/TAMPER_PROTECTION_SETUP.md](docs/TAMPER_PROTECTION_SETUP.md) for organization rulesets (prevents modifications entirely).
 
 **See**:
 - **Complete setup guide**: [docs/INSTRUCTOR_GUIDE.md](docs/INSTRUCTOR_GUIDE.md)
-- **Tamper protection details**: [docs/TAMPER_PROTECTION_SETUP.md](docs/TAMPER_PROTECTION_SETUP.md)
+- **Tamper protection comparison**: [docs/TAMPER_PROTECTION_SETUP.md](docs/TAMPER_PROTECTION_SETUP.md)
 
 ---
 

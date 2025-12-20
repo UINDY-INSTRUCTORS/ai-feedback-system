@@ -99,11 +99,27 @@ The system automatically analyzes their report and posts feedback as a GitHub Is
 
 ## Protecting the Feedback System from Tampering
 
-**Important:** When deployed to student repos, students have write access and could potentially modify or delete the `.github` folder (workflows, scripts, rubrics). To prevent this:
+**Important:** When deployed to student repos, students have write access and could potentially modify or delete the `.github` folder (workflows, scripts, rubrics).
 
-### Recommended: Organization Rulesets (Automatic Protection)
+### Easiest: GitHub Classroom Protected Paths (Built-in Feature) ⭐
 
-If you're using GitHub Classroom (with an organization), set up organization rulesets once to automatically protect all student repos:
+**GitHub Classroom has a built-in feature for this!** When creating your assignment:
+
+1. In the assignment creation form, find **"Protected file paths"**
+2. Add this pattern: `.github/**/*`
+3. Save and create assignment
+
+**What happens:**
+- Students can push normally (no errors)
+- If they modify `.github` files, their submission gets labeled: **"Protected file(s) modified"**
+- You see these labels on the assignment dashboard before grading
+- Simple detection and deterrence
+
+**Setup time:** 30 seconds per assignment
+
+### Optional: Maximum Protection with Organization Rulesets
+
+For situations where you need to **prevent** (not just detect) modifications:
 
 1. Go to your organization Settings → Rules → Rulesets
 2. Create a new branch ruleset:
@@ -112,13 +128,13 @@ If you're using GitHub Classroom (with an organization), set up organization rul
    - Branch: `main`
    - Enable: "Require pull request before merging" (1 approval)
 
-**Result:** Students can push their work normally, but cannot modify the `.github` folder.
+**Result:** Students **cannot** push changes to `.github` folder (push will fail).
 
-**Full setup guide:** See `docs/TAMPER_PROTECTION_SETUP.md`
+**Setup time:** ~10 minutes (one-time for all assignments)
 
-### Validation Script (Optional but Recommended)
+### Validation Script (Additional Safety Check)
 
-Before final grading, run the validation script to verify no tampering occurred:
+Before final grading, optionally run the validation script to verify integrity:
 
 ```bash
 # Generate expected checksum from your template
@@ -132,7 +148,7 @@ export GITHUB_CLASSROOM_ORG="your-org-name"
 
 This creates a report showing which repos (if any) have modified `.github` folders.
 
-**For more details:** See `TAMPER_RESISTANCE.md` for the full analysis and alternative approaches.
+**For complete details and comparison:** See `docs/TAMPER_PROTECTION_SETUP.md`
 
 ---
 

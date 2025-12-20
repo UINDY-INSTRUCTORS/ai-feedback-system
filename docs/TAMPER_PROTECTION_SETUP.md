@@ -2,17 +2,87 @@
 
 ## Overview
 
-This guide shows you how to prevent students from modifying the AI feedback system files (`.github` folder) using **GitHub Organization Rulesets**. This is the recommended approach because:
+This guide shows you how to protect the AI feedback system files (`.github` folder) from student modifications. There are two approaches:
 
-- ✅ **Automatic** - Applies to all new repos instantly
-- ✅ **No scripts needed** - Configured once in organization settings
-- ✅ **No timing window** - Protection is active immediately when repos are created
-- ✅ **Centrally managed** - Update rules in one place
-- ✅ **Can't be bypassed** - Students don't have permission to disable rulesets
+1. **GitHub Classroom Protected Paths** (Easiest) - Built-in detection feature
+2. **Organization Rulesets** (Maximum Protection) - Prevents modifications entirely
 
 ---
 
-## Prerequisites
+## ⭐ Option 1: GitHub Classroom Protected Paths (RECOMMENDED FOR MOST CASES)
+
+GitHub Classroom has a **built-in feature** that makes this simple!
+
+### How It Works
+
+When creating an assignment, you can specify "protected file paths" that GitHub Classroom will monitor:
+- Students **can** push changes to protected files (won't fail)
+- GitHub Classroom **automatically labels** submissions that modify protected files
+- You see "Protected file(s) modified" label on assignment dashboard
+- Acts as **deterrent** and provides **easy visibility**
+
+### Setup (30 Seconds)
+
+When creating your assignment in GitHub Classroom:
+
+1. In the assignment creation form, find **"Protected file paths"** section
+2. Add this path pattern:
+   ```
+   .github/**/*
+   ```
+3. Save and create assignment
+
+That's it! No additional setup needed.
+
+### What Happens
+
+**Student modifies .github folder:**
+```bash
+echo "# modified" >> .github/workflows/report-feedback.yml
+git add .github
+git commit -m "Try to change workflow"
+git push  # ✅ Push succeeds (no error)
+```
+
+**On your assignment dashboard:**
+- Student's submission shows: 🏷️ **"Protected file(s) modified"**
+- Click to see which files were changed
+- Can deduct points or ask student to revert
+
+### Pros
+- ✅ **Built into GitHub Classroom** - no extra setup
+- ✅ **Easy visibility** - see labeled submissions at a glance
+- ✅ **No scripts needed** - automatic detection
+- ✅ **Students can fix mistakes** - push reverts if needed
+- ✅ **Simple workflow** - one setting per assignment
+
+### Cons
+- ⚠️ **Detection only** - doesn't prevent modifications
+- ⚠️ **Requires manual review** - need to check dashboard
+- ⚠️ Students might not realize files are protected until grading
+
+### When to Use This
+- **Most educational contexts** - detection is sufficient deterrent
+- You want simple, no-maintenance solution
+- You're comfortable reviewing labeled submissions
+- Academic integrity policy covers this scenario
+
+---
+
+## Option 2: Organization Rulesets (MAXIMUM PROTECTION)
+
+For situations where you need to **prevent** modifications entirely (not just detect them), use organization rulesets.
+
+### How It Works
+
+Organization Rulesets are **repository settings configured at the organization level** that automatically apply to all repositories:
+
+- **Configured once** in organization settings
+- **Applies automatically** to all new repos instantly
+- **Prevents** students from pushing `.github` changes (push fails)
+- **Cannot be bypassed** - students don't have permission to disable rulesets
+
+### Prerequisites
 
 - **Admin access** to your GitHub Classroom organization
 - **Students have Write access** to their repos (default for GitHub Classroom)
@@ -294,10 +364,56 @@ For maximum security, consider adding:
 
 ---
 
-## Summary Checklist
+## Comparison: Which Approach Should I Use?
 
-Setup checklist for instructors:
+| Feature | GitHub Classroom Protected Paths | Organization Rulesets |
+|---------|----------------------------------|----------------------|
+| **Setup Time** | 30 seconds per assignment | 10 minutes (one-time) |
+| **Applies To** | Per assignment | All repos in organization |
+| **Protection Type** | Detection (labels submissions) | Prevention (blocks pushes) |
+| **Student Experience** | Can push, sees no error | Push fails with error message |
+| **Visibility** | Dashboard labels | N/A (blocked entirely) |
+| **Maintenance** | None | None |
+| **Complexity** | Very simple | Moderate |
+| **Best For** | Most educational use cases | High-stakes or automated grading |
 
+### Recommendation
+
+**For most instructors:** Start with **GitHub Classroom Protected Paths**
+- Simpler setup
+- Built-in feature
+- Sufficient deterrent for honest mistakes
+- Easy to see and address violations
+
+**Consider Organization Rulesets if:**
+- You're using automated grading based on feedback
+- You want absolute certainty that files aren't modified
+- Your academic integrity policy requires prevention
+- You have time for initial setup
+
+**Belt and suspenders approach:**
+- Use GitHub Classroom Protected Paths (built-in)
+- Run validation script before final grading: `scripts/validate_repos.sh`
+- This gives you detection + verification with minimal effort
+
+---
+
+## Summary Checklists
+
+### Option 1: GitHub Classroom Protected Paths (Recommended)
+
+When creating assignment in GitHub Classroom:
+- [ ] Find "Protected file paths" section
+- [ ] Add pattern: `.github/**/*`
+- [ ] Save and create assignment
+- [ ] Before grading: Check dashboard for "Protected file(s) modified" labels
+- [ ] (Optional) Run validation script: `scripts/validate_repos.sh`
+
+**Setup time:** 30 seconds per assignment
+
+### Option 2: Organization Rulesets (Maximum Protection)
+
+One-time setup:
 - [ ] Access organization settings (admin required)
 - [ ] Navigate to Rules → Rulesets
 - [ ] Create new branch ruleset
@@ -313,9 +429,35 @@ Setup checklist for instructors:
 - [ ] Verify workflows still run
 - [ ] Document for students in assignment instructions
 
+**Setup time:** 10 minutes (one-time for all assignments)
+
 ---
 
 ## Student Communication
+
+### For GitHub Classroom Protected Paths
+
+Add this to your assignment instructions:
+
+```markdown
+## Important: AI Feedback System
+
+This repository includes an automated AI feedback system in the `.github` folder.
+
+**DO NOT modify any files in the `.github` folder.** These files contain the
+automated feedback system and are monitored. Modifications will be flagged on
+the assignment dashboard and may result in point deductions.
+
+You can freely:
+- Modify your report files (`index.qmd`, code, images, etc.)
+- Create commits and push to the repository
+- Create tags to request feedback (`git tag feedback-v1; git push origin feedback-v1`)
+
+If you need to modify the feedback system for legitimate reasons, contact your
+instructor before making changes.
+```
+
+### For Organization Rulesets
 
 Add this to your assignment instructions:
 
@@ -341,13 +483,26 @@ instructor.
 
 ## Next Steps
 
-1. ✅ Set up organization ruleset (following this guide)
+### Using GitHub Classroom Protected Paths (Recommended)
+
+1. ✅ Deploy AI feedback system to your assignment template repo
+2. ✅ Create assignment in GitHub Classroom
+3. ✅ Set protected path: `.github/**/*`
+4. ✅ Students accept assignment
+5. ✅ Before grading: Check dashboard for "Protected file(s) modified" labels
+6. ✅ (Optional) Run validation script before final grading
+
+### Using Organization Rulesets (Optional)
+
+1. ✅ Set up organization ruleset (one-time, ~10 minutes)
 2. ✅ Test with a student account
 3. ✅ Deploy AI feedback system to your assignment template
 4. ✅ Create assignment in GitHub Classroom
 5. ✅ Students accept → repos automatically protected
-6. ✅ (Optional) Run validation script before grading: `scripts/validate_repos.sh`
+6. ✅ (Optional) Run validation script before grading
 
 ---
 
-**Questions or issues?** Check GitHub's documentation on [organization rulesets](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets).
+**More information:**
+- [GitHub Classroom Protected Paths](https://docs.github.com/en/education/manage-coursework-with-github-classroom/teach-with-github-classroom/monitor-students-progress-with-the-assignment-dashboard)
+- [Organization Rulesets](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets)
