@@ -212,6 +212,8 @@ Four course examples included:
 
 - **[INSTRUCTOR_GUIDE.md](INSTRUCTOR_GUIDE.md)** - Complete setup, customization, and troubleshooting guide
 - **[docs/RUBRIC_CONVERTER.md](docs/RUBRIC_CONVERTER.md)** - How to write rubrics in Markdown instead of YAML
+- **[docs/UPDATING_DEPLOYED_ASSIGNMENTS.md](docs/UPDATING_DEPLOYED_ASSIGNMENTS.md)** - How to update deployed assignments with new features
+- **[CHANGELOG.md](CHANGELOG.md)** - Version history and release notes
 - **[TEMPLATE_SYSTEM.md](TEMPLATE_SYSTEM.md)** - Template system overview and workflow
 - **[DEPLOYMENT.md](DEPLOYMENT.md)** - Technical deployment details
 - **[.github/feedback/README.md](.github/feedback/README.md)** - Quick setup instructions
