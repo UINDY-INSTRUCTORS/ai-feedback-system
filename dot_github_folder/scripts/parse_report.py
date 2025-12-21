@@ -2,6 +2,7 @@
 """
 Generic Quarto/Markdown report parser.
 Extracts content, structure, and a detailed map of figures for AI analysis.
+Also extracts notebook cell outputs (tables, text, markdown, latex).
 """
 
 import json
@@ -9,11 +10,13 @@ import yaml
 import re
 import sys
 from pathlib import Path
+from html_to_markdown import convert_notebook_output_to_markdown
 
 def parse_quarto(file_path: str) -> dict:
     """
     Parse a Quarto (.qmd) document, find all figures (manual and generated),
     and map generated figures back to the embed shortcodes that created them.
+    Also extracts all notebook cell outputs for comprehensive analysis.
     """
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
@@ -23,9 +26,10 @@ def parse_quarto(file_path: str) -> dict:
         sys.exit(1)
 
     body = _get_body_content(content)
-    
+
     figures_list = _extract_figures(body, Path(file_path).stem)
     structure = _extract_structure(body)
+    notebook_outputs = _extract_notebook_outputs(body)
     stats = _calculate_stats(body, len(figures_list))
     supplementary_status = _check_supplementary_files()
 
@@ -37,6 +41,7 @@ def parse_quarto(file_path: str) -> dict:
             'count': len(figures_list),
             'details': figures_list
         },
+        'notebook_outputs': notebook_outputs,
         'stats': stats,
         'supplementary': supplementary_status
     }
@@ -181,6 +186,168 @@ def _check_supplementary_files() -> dict:
         }
     return status
 
+def _extract_notebook_outputs(body: str) -> list:
+    """
+    Find all {{< embed ... >}} shortcodes and extract their cell outputs.
+    Returns a list of dicts with embed info and extracted outputs.
+    """
+    embeds = re.findall(r'\{\{<\s*embed\s+(.*?)\s*>\}\}', body)
+    notebook_outputs = []
+
+    print("   Extracting notebook cell outputs...")
+
+    for embed in embeds:
+        # Parse embed shortcode (format: "notebook.ipynb#cell-id param1 param2")
+        parts = embed.split()
+        notebook_ref = parts[0]  # e.g., "notebook.ipynb#cell-id"
+
+        ref_parts = notebook_ref.split('#')
+        notebook_path = ref_parts[0].strip()
+        cell_id = ref_parts[1] if len(ref_parts) > 1 else None
+
+        # Try to find the notebook file - prefer OUTPUT notebooks (they have rendered results)
+        nb_path = None
+        nb_stem = Path(notebook_path).stem
+
+        # First try output directory (has actual outputs)
+        output_paths = [
+            Path(f"output/{nb_stem}.out.ipynb"),
+            Path(f"output/{notebook_path}"),
+        ]
+
+        for path in output_paths:
+            if path.exists():
+                nb_path = path
+                break
+
+        # Fall back to source notebook
+        if not nb_path:
+            source_paths = [
+                Path(notebook_path),
+                Path(f"./{notebook_path}"),
+                Path(f"../{notebook_path}"),
+            ]
+            for path in source_paths:
+                if path.exists():
+                    nb_path = path
+                    break
+
+        if nb_path and nb_path.exists():
+            try:
+                outputs = _extract_cell_outputs_from_notebook(str(nb_path), cell_id)
+                if outputs:
+                    # Convert outputs to markdown format
+                    converted = convert_notebook_output_to_markdown(outputs)
+
+                    notebook_outputs.append({
+                        'embed': embed,
+                        'notebook': str(nb_path),
+                        'cell_id': cell_id,
+                        'outputs': converted
+                    })
+                    print(f"      Extracted outputs from {nb_path}#{cell_id or 'all'}")
+                else:
+                    print(f"      No outputs found in {nb_path}#{cell_id or 'all'}")
+            except Exception as e:
+                print(f"      WARNING: Failed to extract from {nb_path}: {e}", file=sys.stderr)
+        else:
+            print(f"      WARNING: Notebook not found: {notebook_path}", file=sys.stderr)
+
+    return notebook_outputs
+
+def _extract_cell_outputs_from_notebook(notebook_path: str, cell_id: str = None) -> dict:
+    """
+    Extract outputs from a Jupyter notebook cell.
+
+    Args:
+        notebook_path: Path to .ipynb file
+        cell_id: Specific cell ID to extract (or None for all cells)
+
+    Returns:
+        Dict with keys: 'text', 'html', 'markdown', 'latex', 'images'
+    """
+    try:
+        with open(notebook_path, 'r', encoding='utf-8') as f:
+            nb = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        print(f"      ERROR reading notebook {notebook_path}: {e}", file=sys.stderr)
+        return {}
+
+    outputs_data = {'text': [], 'html': [], 'markdown': [], 'latex': [], 'images': []}
+
+    for cell in nb.get('cells', []):
+        # If cell_id specified, only process that cell
+        if cell_id:
+            # Match both the cell ID and common Quarto label formats
+            cell_matches = (
+                cell.get('id') == cell_id or
+                cell.get('metadata', {}).get('label') == cell_id or
+                cell.get('metadata', {}).get('tags', []) and cell_id in cell.get('metadata', {}).get('tags', [])
+            )
+            if not cell_matches:
+                continue
+
+        # Extract outputs from this cell
+        for output in cell.get('outputs', []):
+            output_type = output.get('output_type')
+
+            # Handle execute_result and display_data outputs
+            if output_type in ('execute_result', 'display_data'):
+                data = output.get('data', {})
+
+                # HTML (tables, formatted output)
+                if 'text/html' in data:
+                    html_content = data['text/html']
+                    if isinstance(html_content, list):
+                        html_content = ''.join(html_content)
+                    outputs_data['html'].append(html_content)
+
+                # Markdown
+                if 'text/markdown' in data:
+                    md_content = data['text/markdown']
+                    if isinstance(md_content, list):
+                        md_content = ''.join(md_content)
+                    outputs_data['markdown'].append(md_content)
+
+                # Plain text
+                if 'text/plain' in data:
+                    text_content = data['text/plain']
+                    if isinstance(text_content, list):
+                        text_content = ''.join(text_content)
+                    outputs_data['text'].append(text_content)
+
+                # LaTeX
+                if 'text/latex' in data:
+                    latex_content = data['text/latex']
+                    if isinstance(latex_content, list):
+                        latex_content = ''.join(latex_content)
+                    outputs_data['latex'].append(latex_content)
+
+                # Images (base64 encoded - not used here, images handled separately)
+                if 'image/png' in data:
+                    outputs_data['images'].append(data['image/png'])
+
+            # Handle stream outputs (print statements)
+            elif output_type == 'stream':
+                stream_text = output.get('text', [])
+                if isinstance(stream_text, list):
+                    stream_text = ''.join(stream_text)
+                outputs_data['text'].append(stream_text)
+
+        # If we found the specific cell, stop searching
+        if cell_id and outputs_data != {'text': [], 'html': [], 'markdown': [], 'latex': [], 'images': []}:
+            break
+
+    # Remove empty lists
+    outputs_data = {k: v for k, v in outputs_data.items() if v}
+
+    # If looking for a specific cell but found nothing, try extracting ALL outputs
+    if cell_id and not outputs_data:
+        print(f"      WARNING: Cell '{cell_id}' not found, extracting all outputs instead", file=sys.stderr)
+        return _extract_cell_outputs_from_notebook(notebook_path, cell_id=None)
+
+    return outputs_data
+
 def main():
     try:
         with open('.github/config.yml', 'r', encoding='utf-8') as f:
@@ -205,11 +372,22 @@ def main():
     stats = parsed['stats']
     print(f"   - {stats['word_count']} words")
     print(f"   - {stats['figures']} figures (manual + generated)")
-    
+
     manual_figs = sum(1 for f in parsed['figures']['details'] if f['source'].startswith('markdown:'))
     mapped_figs = sum(1 for f in parsed['figures']['details'] if not f['source'].startswith('markdown:'))
     print(f"     - {manual_figs} manually linked")
     print(f"     - {mapped_figs} generated from notebooks")
+
+    # Print notebook output statistics
+    nb_outputs = parsed.get('notebook_outputs', [])
+    if nb_outputs:
+        print(f"   - {len(nb_outputs)} notebook cell(s) with outputs extracted")
+        total_tables = sum(len(nb['outputs'].get('html_as_markdown', [])) for nb in nb_outputs)
+        total_text = sum(len(nb['outputs'].get('text', [])) for nb in nb_outputs)
+        if total_tables > 0:
+            print(f"     - {total_tables} HTML table(s) converted to markdown")
+        if total_text > 0:
+            print(f"     - {total_text} text output(s)")
 
 if __name__ == '__main__':
     main()

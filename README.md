@@ -160,6 +160,14 @@ Each feedback request creates a separate issue so you can track your progress.
 - Provides focused, detailed feedback per criterion
 - Works within GitHub Models token limits
 
+### Comprehensive Notebook Output Extraction
+- **Extracts ALL notebook cell outputs** - not just images
+- **HTML tables** (pandas DataFrames) → Clean markdown tables
+- **Text outputs** (print statements, calculations) → Preserved
+- **Markdown and LaTeX** outputs → Included in context
+- Analyzes measurement tables, statistical results, computational outputs
+- More token-efficient than vision API for tabular data
+
 ### Multi-Course Support
 Four course examples included:
 - **EENG-320** (Electronics) - Circuit design, simulation, experimentation
@@ -209,10 +217,12 @@ your-assignment-repo/
     workflows/
       report-feedback.yml      ← GitHub Actions workflow
     scripts/
-      parse_report.py          ← Parse student report
-      section_extractor.py     ← Extract relevant sections
+      parse_report.py          ← Parse student report & notebook outputs
+      section_extractor.py     ← Extract relevant sections & augment with outputs
+      html_to_markdown.py      ← Convert HTML tables to markdown
       ai_feedback_criterion.py ← Generate AI feedback
       create_issue.py          ← Post feedback as GitHub Issue
+      image_utils.py           ← Vision support utilities
     feedback/
       rubric.yml               ← Grading criteria
       guidance.md              ← AI instructions
@@ -240,9 +250,13 @@ your-assignment-repo/
 
 1. **Student tags commit** for feedback (e.g., `feedback-v1`)
 2. **GitHub Actions triggers** workflow
-3. **Parse report** into sections, figures, equations
+3. **Parse report** into sections, figures, equations, and notebook outputs
+   - Extracts text from markdown sections
+   - Finds embedded images
+   - **Extracts notebook cell outputs** (tables, text, calculations)
+   - **Converts HTML tables to markdown** for AI analysis
 4. **For each rubric criterion**:
-   - Extract relevant sections
+   - Extract relevant sections (text + notebook outputs)
    - Send to GitHub Models API
    - Get focused feedback
 5. **Combine feedback** from all criteria

@@ -26,7 +26,7 @@ def extract_sections_for_criterion_ai(
     model: str = "gpt-4o-mini"
 ) -> Tuple[str, List[str]]:
     """
-    Use AI to extract relevant text, then find associated images.
+    Use AI to extract relevant text, then find associated images and notebook outputs.
     """
     # 1. Extract relevant text sections using an AI model
     full_content = report.get('content', '')
@@ -40,7 +40,10 @@ def extract_sections_for_criterion_ai(
             print(f"WARNING: AI text extraction failed for {criterion['name']}: {e}", file=sys.stderr)
             extracted_text = full_content[:8000]
 
-    # 2. Extract relevant images based on the extracted text
+    # 2. Augment extracted text with notebook outputs
+    extracted_text = augment_with_notebook_outputs(report, extracted_text)
+
+    # 3. Extract relevant images based on the extracted text
     image_paths = []
     vision_config = config.get('vision', {})
     if vision_config.get('enabled', False):
@@ -55,6 +58,64 @@ def extract_sections_for_criterion_ai(
             print(f"   Vision disabled for '{criterion_id}'.")
 
     return extracted_text, image_paths
+
+def augment_with_notebook_outputs(report: Dict[str, Any], extracted_text: str) -> str:
+    """
+    Find notebook outputs that correspond to embeds in the extracted text
+    and append them in a readable format.
+    """
+    # Find all embed shortcodes in the extracted text
+    embeds_in_text = set(re.findall(r'\{\{<\s*embed\s+(.*?)\s*>\}\}', extracted_text))
+
+    if not embeds_in_text:
+        return extracted_text
+
+    # Get notebook outputs from the report
+    notebook_outputs = report.get('notebook_outputs', [])
+
+    if not notebook_outputs:
+        return extracted_text
+
+    # Build additional context from notebook outputs
+    additional_context = []
+
+    for nb_output in notebook_outputs:
+        if nb_output['embed'] in embeds_in_text:
+            outputs = nb_output['outputs']
+            cell_id = nb_output.get('cell_id', 'unknown')
+
+            # Format the notebook outputs for AI readability
+            output_text = f"\n\n### Notebook Output from {{{{< embed {nb_output['embed']} >}}}}\n\n"
+
+            # Add HTML tables (converted to markdown)
+            if 'html_as_markdown' in outputs:
+                for table in outputs['html_as_markdown']:
+                    output_text += f"{table}\n\n"
+
+            # Add markdown outputs
+            if 'markdown' in outputs:
+                for md in outputs['markdown']:
+                    output_text += f"{md}\n\n"
+
+            # Add text outputs
+            if 'text' in outputs:
+                for text in outputs['text']:
+                    output_text += f"```\n{text}\n```\n\n"
+
+            # Add LaTeX outputs
+            if 'latex' in outputs:
+                for latex in outputs['latex']:
+                    output_text += f"{latex}\n\n"
+
+            additional_context.append(output_text)
+
+    # Append all notebook outputs to the extracted text
+    if additional_context:
+        augmented = extracted_text + "\n\n" + "---\n\n".join(additional_context)
+        print(f"   Added {len(additional_context)} notebook output(s) to extracted text")
+        return augmented
+
+    return extracted_text
 
 def extract_relevant_images(
     report: Dict[str, Any],

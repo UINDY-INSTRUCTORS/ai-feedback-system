@@ -661,3 +661,254 @@ Successfully merged feedback system to main while excluding student work:
 
 **Status**: ✅ Clean, reusable template ready for any course
 **Next**: Test with real student reports in GitHub Actions
+
+---
+
+# Session 3 - Notebook Output Extraction - December 20, 2025
+
+## Session Objective
+
+Extend the feedback system to extract and analyze ALL notebook cell outputs (not just images), including HTML tables, text outputs, markdown, and LaTeX. This enables comprehensive analysis of student computational work, data tables, and numerical results.
+
+## What We Built
+
+### 1. HTML-to-Markdown Converter (`html_to_markdown.py`)
+
+**Purpose**: Convert pandas DataFrames and other HTML outputs to clean markdown for AI analysis.
+
+**Key Features**:
+- Strips CSS `<style>` tags and `<div>` wrappers (pandas includes styling)
+- Converts HTML tables to markdown table format
+- Preserves formatting (bold, italic, links, code blocks)
+- Handles lists and headers
+- Token-efficient output
+
+**Example Conversion**:
+```html
+<div><style scoped>...</style>
+<table border="1" class="dataframe">
+  <tr><th>Voltage</th><th>Current</th></tr>
+  <tr><td>5.0V</td><td>100mA</td></tr>
+</table></div>
+```
+
+Becomes:
+```markdown
+| Voltage | Current |
+| ------- | ------- |
+| 5.0V    | 100mA   |
+```
+
+### 2. Enhanced Report Parser (`parse_report.py`)
+
+**New Function**: `_extract_notebook_outputs(body: str) -> list`
+
+Extracts all outputs from embedded notebook cells:
+- HTML tables → Converted to markdown
+- Text outputs → Preserved (print statements, calculations)
+- Markdown outputs → Preserved
+- LaTeX equations → Preserved
+- Stream outputs → Captured
+
+**Smart Notebook Discovery**:
+1. Prefers `output/*.out.ipynb` (rendered versions with actual outputs)
+2. Falls back to source notebooks if needed
+3. Handles missing cell labels by extracting all outputs
+
+**Output Structure**:
+```python
+{
+  'embed': 'notebook.ipynb#cell-id echo=True',
+  'notebook': 'output/notebook.out.ipynb',
+  'cell_id': 'cell-id',
+  'outputs': {
+    'html_as_markdown': ['| col1 | col2 |\n...'],
+    'text': ['calculation result: 5.0'],
+    'markdown': ['**Result**: Success'],
+    'latex': ['$$E = mc^2$$']
+  }
+}
+```
+
+### 3. Enhanced Section Extractor (`section_extractor.py`)
+
+**New Function**: `augment_with_notebook_outputs(report, extracted_text) -> str`
+
+**How it works**:
+1. Find `{{< embed >}}` shortcodes in extracted text
+2. Match them to notebook outputs from parsed report
+3. Append formatted outputs after relevant text sections
+
+**Output Format for AI**:
+```markdown
+[Extracted text sections...]
+
+---
+
+### Notebook Output from {{< embed notebook.ipynb#data-analysis >}}
+
+| Measurement | Expected | Actual | Error % |
+| ----------- | -------- | ------ | ------- |
+| Voltage     | 5.0V     | 4.98V  | 0.4%    |
+| Current     | 100mA    | 102mA  | 2.0%    |
+
+```
+Additional calculation output...
+```
+```
+
+## Test Results
+
+### Test 1: Basic Functionality (`test-student-repo`)
+
+**Report**: Math with circuits (LPF and derivatives)
+**Embeds**: 8 notebook cells
+
+**Results**:
+```
+✅ Report parsed successfully:
+   - 1000 words
+   - 10 figures (manual + generated)
+   - 8 notebook cell(s) with outputs extracted
+   - 7 text output(s)
+```
+
+**Finding**: Successfully extracted text outputs. No HTML tables (student used print statements).
+
+### Test 2: Production Data (`p3-amplification-joeylongo17`)
+
+**Report**: Amplification project with extensive data analysis
+**Embeds**: 26 notebook cells
+**Source**: `PDFs_allthat.ipynb` (68 cells, 45 with outputs, 15 with HTML tables)
+
+**Results**:
+```
+✅ Report parsed successfully:
+   - 1287 words
+   - 5 figures (manual + generated)
+   - 26 notebook cell(s) with outputs extracted
+   - 9 HTML table(s) converted to markdown
+   - 38 text output(s)
+```
+
+**Sample Extracted Table**:
+```markdown
+|  | j | v-sweep | v(ADC0) | v(ADC1) | v(ADC2) | time |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0 | 0 | 0.000000 | 0.079963 | 0.080970 | 2.72998 | 0.000122 |
+| 1 | 1 | 0.012891 | 0.079963 | 0.083992 | 2.72998 | 0.003937 |
+| 2 | 2 | 0.025832 | 0.091998 | 0.095976 | 2.72998 | 0.008026 |
+```
+
+**Quality**: ✅ Clean conversion, no CSS remnants, fully readable
+
+## Key Benefits
+
+### For AI Analysis
+
+**Before** (Images Only):
+- ❌ Couldn't see tabular data
+- ❌ Missed numerical results
+- ❌ No access to computational outputs
+- ❌ Required vision API for everything
+
+**After** (All Outputs):
+- ✅ Analyzes measurement tables
+- ✅ Reviews statistical results
+- ✅ Verifies calculations
+- ✅ More token-efficient (text < images)
+
+### Use Cases by Course
+
+**PHYS 230** (Circuits & Instrumentation):
+- Measurement tables: Voltage, current, frequency data
+- Calibration data: Sensor readings, error analysis
+- Statistical analysis: Mean, std dev, uncertainty
+
+**PHYS 280** (Computational Physics):
+- Algorithm outputs: Convergence data, iteration counts
+- Parameter studies: Tables of results across sweeps
+- Performance metrics: Runtime, accuracy, error rates
+
+**EENG Courses**:
+- Simulation results: SPICE output tables
+- Component specifications: Parts lists with values
+- Test results: Pass/fail tables, measurement logs
+
+## Technical Implementation
+
+### Embed Shortcode Parsing
+
+**Format**: `{{< embed notebook.ipynb#cell-id param1 param2 >}}`
+
+**Strategy**:
+1. Split on whitespace to separate reference from parameters
+2. Split reference on `#` to get path and cell ID
+3. Search `output/notebook.out.ipynb` first (has executed outputs)
+4. Fall back to source if needed
+
+### Cell Matching Strategies
+
+Tries multiple approaches:
+1. Exact cell `id` match
+2. Cell metadata `label` match
+3. Cell metadata `tags` match
+4. **Fallback**: Extract ALL outputs if cell not found
+
+### Output Type Handling
+
+```python
+# HTML tables (pandas DataFrames)
+'text/html' → convert_to_markdown() → clean tables
+
+# Text outputs (print, calculations)
+'text/plain' → preserve in code blocks
+
+# Markdown outputs
+'text/markdown' → preserve as-is
+
+# LaTeX equations
+'text/latex' → preserve as-is (models understand LaTeX)
+
+# Stream outputs (print statements)
+'stream' → capture all text
+```
+
+## Files Created/Modified
+
+### New Files ✨
+1. **`scripts/html_to_markdown.py`** - HTML table to markdown converter
+   - Table parsing and conversion
+   - CSS/style stripping
+   - Format preservation
+   - Standalone utility
+
+### Modified Files 📝
+1. **`scripts/parse_report.py`**
+   - Added `_extract_notebook_outputs()` function
+   - Added `_extract_cell_outputs_from_notebook()` function
+   - Smart output notebook discovery
+   - Updated statistics reporting
+
+2. **`scripts/section_extractor.py`**
+   - Added `augment_with_notebook_outputs()` function
+   - Integrates outputs into extracted context
+   - Formats outputs for AI readability
+
+3. **`docs/NOTEBOOK_OUTPUTS_TESTING.md`** - Comprehensive testing documentation
+
+## Session Stats
+
+**Duration**: ~3 hours
+**Files created**: 2 (html_to_markdown.py, NOTEBOOK_OUTPUTS_TESTING.md)
+**Files modified**: 2 (parse_report.py, section_extractor.py)
+**Test repositories**: 2
+**HTML tables converted**: 9
+**Text outputs extracted**: 45
+**Success rate**: 100%
+
+---
+
+**Status**: ✅ **FULLY INTEGRATED AND TESTED**
+**Production Ready**: Yes - tested with real student reports
+**Next**: Deploy with main feedback system, monitor performance
