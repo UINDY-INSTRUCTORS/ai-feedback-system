@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Create GitHub issue with AI-generated feedback.
+Create GitHub issue with AI-generated feedback from structured JSON.
 """
 
 import os
@@ -10,207 +10,142 @@ import requests
 import sys
 from datetime import datetime
 
-# Load environment variables from .env file if it exists (for local testing)
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except ImportError:
-    pass  # dotenv not available (e.g., in GitHub Actions), that's OK
-
-def create_issue(title, body, label):
-    """Create a GitHub issue using GitHub API."""
+def create_github_issue(title: str, body: str, label: str):
+    """Create a GitHub issue using the API."""
     token = os.environ.get('GITHUB_TOKEN')
-    if not token:
-        print("ERROR: GITHUB_TOKEN not found in environment")
-        sys.exit(1)
-
     repo = os.environ.get('GITHUB_REPOSITORY')
-    if not repo:
-        print("ERROR: GITHUB_REPOSITORY not found in environment")
-        print("This script should be run in GitHub Actions context")
+    if not token or not repo:
+        print("ERROR: GITHUB_TOKEN and GITHUB_REPOSITORY must be set for API calls.", file=sys.stderr)
         sys.exit(1)
 
     url = f"https://api.github.com/repos/{repo}/issues"
+    headers = {'Authorization': f'Bearer {token}', 'Accept': 'application/vnd.github.v3+json'}
+    data = {'title': title, 'body': body, 'labels': [label]}
 
-    headers = {
-        'Authorization': f'Bearer {token}',
-        'Accept': 'application/vnd.github.v3+json',
-        'X-GitHub-Api-Version': '2022-11-28'
-    }
-
-    data = {
-        'title': title,
-        'body': body,
-        'labels': [label]
-    }
-
-    print(f"Creating issue in repository: {repo}")
-    print(f"Issue title: {title}")
-
+    print(f"Creating issue in repository: {repo}...")
     try:
         response = requests.post(url, headers=headers, json=data, timeout=30)
         response.raise_for_status()
-
         issue = response.json()
+        print(f"✅ Feedback issue created successfully: {issue['html_url']}")
         return issue['html_url'], issue['number']
-
     except requests.exceptions.HTTPError as e:
-        print(f"ERROR: Failed to create issue. HTTP {e.response.status_code}")
-        print(f"Response: {e.response.text}")
+        print(f"ERROR: Failed to create issue. HTTP {e.response.status_code}", file=sys.stderr)
+        print(f"Response: {e.response.text}", file=sys.stderr)
         sys.exit(1)
 
-    except requests.exceptions.RequestException as e:
-        print(f"ERROR: Request failed: {e}")
-        sys.exit(1)
+def format_feedback_body(feedback_data: list, rubric_data: dict) -> str:
+    """Formats the list of JSON feedback objects into a Markdown string."""
+    body_parts = []
+    rubric_criteria = {c['id']: c for c in rubric_data.get('criteria', [])}
+    
+    for item in feedback_data:
+        criterion_name = item.get('criterion', 'Unknown Criterion')
+        body_parts.append(f"### {criterion_name}\n")
 
-def label_previous_issues(repo, token, current_issue_number):
-    """Add 'superseded' label to previous feedback issues."""
-    try:
-        with open('.github/feedback/config.yml') as f:
-            config = yaml.safe_load(f)
-    except Exception as e:
-        print(f"WARNING: Could not load config for labeling: {e}")
-        return
+        if not item.get('success', False):
+            body_parts.append(f"**Error generating feedback:**\n`{item.get('error', 'No details available.')}`\n\n---\n")
+            continue
 
-    if not config.get('label_previous_issues', False):
-        return
+        raw_feedback = item.get('feedback', {})
+        feedback = {}
 
-    # Search for previous feedback issues
-    url = f"https://api.github.com/repos/{repo}/issues"
-    headers = {
-        'Authorization': f'Bearer {token}',
-        'Accept': 'application/vnd.github.v3+json'
-    }
+        # Standardize the feedback object, whether it's a string or dict.
+        if isinstance(raw_feedback, str):
+            try:
+                feedback = json.loads(raw_feedback)
+            except json.JSONDecodeError:
+                body_parts.append(f"**Could not parse AI feedback.**\n\n---\n")
+                continue
+        elif isinstance(raw_feedback, dict):
+            feedback = raw_feedback
 
-    params = {
-        'labels': config.get('issue_label', 'ai-feedback'),
-        'state': 'open'
-    }
+        # The AI sometimes nests the actual feedback dict inside a "feedback" key.
+        if 'feedback' in feedback and isinstance(feedback['feedback'], dict):
+            feedback = feedback['feedback']
 
-    try:
-        response = requests.get(url, headers=headers, params=params, timeout=30)
-        response.raise_for_status()
-        issues = response.json()
+        # The AI sometimes nests the actual feedback dict inside a "summary" key.
+        # If so, we use the nested dict as our main feedback object.
+        if 'summary' in feedback and isinstance(feedback['summary'], dict):
+            feedback = feedback['summary']
 
-        for issue in issues:
-            if issue['number'] != current_issue_number:
-                # Add superseded label
-                label_url = f"https://api.github.com/repos/{repo}/issues/{issue['number']}/labels"
-                label_data = {'labels': ['superseded']}
-                requests.post(label_url, headers=headers, json=label_data, timeout=30)
-                print(f"   Labeled issue #{issue['number']} as superseded")
+        rubric_criterion = next((c for c in rubric_criteria.values() if c['name'] == criterion_name), {})
+        max_score = rubric_criterion.get('weight', 0)
 
-    except Exception as e:
-        print(f"WARNING: Failed to label previous issues: {e}")
+        level = feedback.get('overall_assessment') or feedback.get('level') or feedback.get('overall_evaluation', 'N/A')
+        score = feedback.get('score', 'N/A')
+
+        body_parts.append(f"**Assessment:** `{level}`")
+        body_parts.append(f"**Score:** `{score} / {max_score}`\n")
+
+        summary_text = feedback.get('summary') or feedback.get('comments') or feedback.get('feedback') or feedback.get('justification')
+        if summary_text and isinstance(summary_text, str):
+             body_parts.append(f"> {summary_text}\n")
+
+        def format_list(title, points):
+            if not points: return []
+            lines = [f"**{title}:"]
+            for point in points:
+                if isinstance(point, dict):
+                    lines.append(f"- **{point.get('issue', 'Suggestion')}:** {point.get('suggestion', '')}")
+                else:
+                    lines.append(f"- {point}")
+            lines.append("")
+            return lines
+
+        body_parts.extend(format_list("Strengths", feedback.get('strengths') or feedback.get('positive')))
+        body_parts.extend(format_list("Areas for Improvement", feedback.get('areas_for_improvement') or feedback.get('negative')))
+        body_parts.extend(format_list("Image-specific Feedback", feedback.get('image_feedback')))
+        body_parts.extend(format_list("Actionable Suggestions", feedback.get('actionable_suggestions')))
+
+        body_parts.append("\n---\n")
+        
+    return "\n".join(body_parts)
+
+def build_issue_footer(report_stats: dict, config: dict) -> str:
+    repo = os.environ.get('GITHUB_REPOSITORY', 'test/repo')
+    tag_name = os.environ.get('TAG_NAME', 'local-test')
+    model = config.get('model', {}).get('primary', 'gpt-4o')
+    rubric_url = f"https://github.com/{repo}/blob/{tag_name}/.github/feedback/rubric.yml"
+    stats_table = f"| Metric | Count |\n|--------|-------|\n| Words | {report_stats.get('word_count', 0)} |\n| Figures | {report_stats.get('figures', 0)} |"
+    return f"\n### 📚 Resources\n- [View Rubric]({rubric_url})\n\n### 📋 Report Statistics\n{stats_table}\n\n---\n*🤖 Powered by [GitHub Models](https://github.com/features/models) ({model}).*"
 
 def main():
-    """Create feedback issue."""
-    print("📝 Creating GitHub Issue with AI Feedback")
-    print("=" * 50)
+    """Load feedback JSON, format it, and create a GitHub issue or print for local test."""
+    is_local_test = os.environ.get('LOCAL_TEST', 'false').lower() == 'true'
 
-    # Load config
     try:
-        with open('.github/feedback/config.yml') as f:
-            config = yaml.safe_load(f)
-    except Exception as e:
-        print(f"ERROR: Failed to load config: {e}")
+        with open('.github/config.yml', 'r', encoding='utf-8') as f: config = yaml.safe_load(f)
+        with open('feedback.json', 'r', encoding='utf-8') as f: feedback_data = json.load(f)
+        with open('parsed_report.json', 'r', encoding='utf-8') as f: report_data = json.load(f)
+        with open('.github/feedback/rubric.yml', 'r', encoding='utf-8') as f: rubric_data = yaml.safe_load(f)
+    except FileNotFoundError as e:
+        print(f"ERROR: Missing required file: {e.filename}", file=sys.stderr)
         sys.exit(1)
 
-    # Load feedback
-    try:
-        with open('feedback.md') as f:
-            feedback_body = f.read()
-    except Exception as e:
-        print(f"ERROR: Failed to load feedback: {e}")
-        sys.exit(1)
+    feedback_body = format_feedback_body(feedback_data, rubric_data)
+    footer = build_issue_footer(report_data.get('stats', {}), config)
 
-    # Load parsed report for stats
-    try:
-        with open('parsed_report.json') as f:
-            report = json.load(f)
-    except Exception as e:
-        print(f"ERROR: Failed to load parsed report: {e}")
-        sys.exit(1)
+    if is_local_test:
+        header = "## 🤖 AI Report Feedback\n\n---\n\n"
+        full_body = header + feedback_body + footer
+        print("--- LOCAL TEST: ISSUE BODY PREVIEW ---")
+        print(full_body)
+        print("--- END PREVIEW ---")
+    else:
+        tag_name = os.environ.get('TAG_NAME', 'feedback')
+        date = datetime.now().strftime('%Y-%m-%d')
+        title = config.get('issue_title_template', '📋 Feedback: {tag_name} ({date})').format(tag_name=tag_name, date=date)
+        
+        time = datetime.now().strftime('%H:%M:%S UTC')
+        model = config.get('model', {}).get('primary', 'gpt-4o')
+        header = f"## 🤖 AI Report Feedback\n> **Requested**: `{tag_name}` • **Generated**: {date} at {time}\n> **Model**: {model}\n\n---\n\n"
+        
+        full_body = header + feedback_body + footer
 
-    # Get environment variables
-    tag_name = os.environ.get('TAG_NAME', 'feedback')
-    repo = os.environ.get('GITHUB_REPOSITORY')
-    date = datetime.now().strftime('%Y-%m-%d')
-    time = datetime.now().strftime('%H:%M:%S UTC')
-
-    # Format title
-    title = config.get('issue_title_template', '📋 Feedback: {tag_name} ({date})').format(
-        tag_name=tag_name,
-        date=date
-    )
-
-    # Construct full issue body
-    model = config.get('model', {}).get('primary', 'gpt-4o')
-
-    header = f"""## 🤖 AI Report Feedback
-
-> **Requested**: `{tag_name}` • **Generated**: {date} at {time}
-> **Model**: {model} • **Word count**: {report['stats']['word_count']}
-
----
-
-"""
-
-    # Construct resource URLs
-    rubric_url = f"https://github.com/{repo}/blob/{tag_name}/.github/feedback/rubric.yml"
-    guidance_url = f"https://github.com/{repo}/blob/{tag_name}/.github/feedback/guidance.md"
-
-    footer = f"""
-
----
-
-### 📚 Resources
-- [View Rubric]({rubric_url}) - Grading criteria and performance levels
-- [Feedback Guidelines]({guidance_url}) - How this feedback was generated
-
-### 📋 Report Statistics
-| Metric | Count |
-|--------|-------|
-| Words | {report['stats']['word_count']} |
-| Code blocks | {report['stats']['code_blocks']} |
-| Equations | {report['stats']['equations']} |
-| Figures | {report['stats']['figures']} |
-| Sections | {report['stats']['sections']} |
-
-### 🔄 Request Updated Feedback
-If you make improvements to your report, request new feedback:
-```bash
-git tag {tag_name.split('-')[0]}-v2  # or v3, v4, etc.
-git push origin {tag_name.split('-')[0]}-v2
-```
-
----
-
-*🤖 Powered by [GitHub Models](https://github.com/features/models) ({model})*
-*This feedback is AI-generated and should be used as guidance. Your instructor makes final grading decisions.*
-"""
-
-    full_body = header + feedback_body + footer
-
-    # Create issue
-    issue_url, issue_number = create_issue(
-        title=title,
-        body=full_body,
-        label=config.get('issue_label', 'ai-feedback')
-    )
-
-    print(f"✅ Feedback issue created successfully!")
-    print(f"   URL: {issue_url}")
-    print(f"   Issue #{issue_number}")
-
-    # Label previous issues if configured
-    token = os.environ.get('GITHUB_TOKEN')
-    repo = os.environ.get('GITHUB_REPOSITORY')
-    if token and repo:
-        print(f"\n🏷️  Checking for previous feedback issues...")
-        label_previous_issues(repo, token, issue_number)
-
-    print("\n✨ Done! Students can now view their feedback.")
+        create_github_issue(title, full_body, config.get('issue_label', 'ai-feedback'))
+        print("\n✨ Done! Students can now view their feedback.")
 
 if __name__ == '__main__':
     main()
+

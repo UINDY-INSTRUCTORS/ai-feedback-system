@@ -26,41 +26,17 @@ jobs:
         with:
           fetch-depth: 0  # Get full history for context
 
-      - name: Validate system integrity
-        run: |
-          echo "🔍 Validating AI feedback system files..."
-
-          MISSING=""
-
-          # Check each required file
-          for file in \
-            ".github/scripts/parse_report.py" \
-            ".github/scripts/ai_feedback_criterion.py" \
-            ".github/scripts/section_extractor.py" \
-            ".github/scripts/create_issue.py" \
-            ".github/feedback/config.yml" \
-            ".github/feedback/rubric.yml" \
-            ".github/feedback/guidance.md"
-          do
-            if [ ! -f "$file" ]; then
-              MISSING="$MISSING\n  - $file"
-            fi
-          done
-
-          if [ -n "$MISSING" ]; then
-            echo "❌ ERROR: Required feedback system files are missing or modified:"
-            echo -e "$MISSING"
-            echo ""
-            echo "⚠️  DO NOT modify files in the .github/ directory."
-            echo "If you need help, contact your instructor."
-            exit 1
-          fi
-
-          echo "✅ All required files present"
-
       - name: Install dependencies
         run: |
-          pip install pyyaml requests
+          pip install pyyaml requests quarto quarto-cli Pillow
+
+      - name: Render Quarto Report
+        run: |
+          # Render the report to generate figures from notebook cells.
+          # We continue on error so that if the student's code fails,
+          # the feedback process can still analyze the raw .qmd file.
+          quarto render
+        continue-on-error: true
 
       - name: Parse report
         id: parse

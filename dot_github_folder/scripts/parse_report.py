@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Generic Quarto/Markdown report parser.
-Extracts content, structure, and metadata for AI analysis.
+Extracts content, structure, and a detailed map of figures for AI analysis.
 """
 
 import json
@@ -10,142 +10,206 @@ import re
 import sys
 from pathlib import Path
 
-def parse_quarto(file_path):
-    """Parse a Quarto (.qmd) document."""
+def parse_quarto(file_path: str) -> dict:
+    """
+    Parse a Quarto (.qmd) document, find all figures (manual and generated),
+    and map generated figures back to the embed shortcodes that created them.
+    """
     try:
-        with open(file_path) as f:
+        with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
     except FileNotFoundError:
-        print(f"ERROR: Report file not found: {file_path}")
-        sys.exit(1)
-    except Exception as e:
-        print(f"ERROR: Failed to read report file: {e}")
+        print(f"ERROR: Report file not found: {file_path}", file=sys.stderr)
         sys.exit(1)
 
-    # Extract YAML frontmatter
-    yaml_match = re.match(r'^---\s*\n(.*?)\n---\s*\n', content, re.DOTALL)
-    metadata = {}
-    body_start = 0
-
-    if yaml_match:
-        try:
-            metadata = yaml.safe_load(yaml_match.group(1))
-        except yaml.YAMLError as e:
-            print(f"WARNING: Failed to parse YAML frontmatter: {e}")
-            metadata = {}
-        body_start = yaml_match.end()
-
-    body = content[body_start:]
-
-    # Extract structure (headings)
-    headings = re.findall(r'^(#{1,6})\s+(.+)$', body, re.MULTILINE)
-    structure = [
-        {'level': len(h[0]), 'text': h[1].strip()}
-        for h in headings
-    ]
-
-    # Count elements
-    code_blocks = len(re.findall(r'```\{python\}.*?```', body, re.DOTALL))
-    equations = len(re.findall(r'\$\$.*?\$\$|\$[^$]+\$', body, re.DOTALL))
-    figures = len(re.findall(r'!\[.*?\]\(.*?\)', body))
-
-    # Extract figure references for checking
-    figure_refs = re.findall(r'!\[(.*?)\]\((.*?)\)', body)
-    figure_captions = [ref[0] for ref in figure_refs]
-    figure_paths = [ref[1] for ref in figure_refs]
-
-    # Word count (approximate - exclude code blocks and LaTeX)
-    text_only = re.sub(r'```.*?```', '', body, flags=re.DOTALL)  # Remove code blocks
-    text_only = re.sub(r'\$\$.*?\$\$', '', text_only, flags=re.DOTALL)  # Remove display math
-    text_only = re.sub(r'\$[^$]+\$', '', text_only)  # Remove inline math
-    words = len(re.findall(r'\w+', text_only))
-
-    # Check for supplementary files
-    supplementary_status = check_supplementary_files()
+    body = _get_body_content(content)
+    
+    figures_list = _extract_figures(body, Path(file_path).stem)
+    structure = _extract_structure(body)
+    stats = _calculate_stats(body, len(figures_list))
+    supplementary_status = _check_supplementary_files()
 
     return {
-        'content': content,
-        'metadata': metadata,
+        'content': body,
+        'metadata': _get_yaml_metadata(content),
         'structure': structure,
         'figures': {
-            'count': figures,
-            'captions': figure_captions,
-            'paths': figure_paths
+            'count': len(figures_list),
+            'details': figures_list
         },
-        'stats': {
-            'word_count': words,
-            'code_blocks': code_blocks,
-            'equations': equations,
-            'figures': figures,
-            'sections': len(structure)
-        },
+        'stats': stats,
         'supplementary': supplementary_status
     }
 
-def check_supplementary_files():
-    """Check for existence of supplementary files mentioned in config."""
+def _get_yaml_metadata(full_content: str) -> dict:
+    """Extracts YAML frontmatter from content."""
+    yaml_match = re.match(r'^---\s*\n(.*?)\n---\s*\n', full_content, re.DOTALL)
+    if yaml_match:
+        try:
+            return yaml.safe_load(yaml_match.group(1))
+        except yaml.YAMLError as e:
+            print(f"WARNING: Failed to parse YAML frontmatter: {e}")
+    return {}
+
+def _get_body_content(full_content: str) -> str:
+    """Extracts the body (non-YAML) content."""
+    if full_content.startswith('\ufeff'):
+        full_content = full_content[1:]
+    
+    yaml_match = re.match(r'^---\s*\n(.*?)\n---\s*\n', full_content, re.DOTALL)
+    body_start = yaml_match.end() if yaml_match else 0
+    return full_content[body_start:]
+
+def _extract_figures(body: str, report_stem: str) -> list:
+    """
+    Extracts all figures using a manual parser for markdown links
+    and a regex for embeds. This is to bypass a subtle regex bug.
+    """
+    figures = []
+    
+    # 1. Manual parser for `![caption](path)`
+    i = 0
+    while i < len(body):
+        i = body.find('![', i)
+        if i == -1: break
+
+        caption_start = i + 2
+        caption_end = body.find(']', caption_start)
+        if caption_end == -1:
+            i += 2
+            continue
+
+        path_start = body.find('(', caption_end)
+        if path_start != caption_end + 1:
+            i = caption_end
+            continue
+
+        path_end = body.find(')', path_start)
+        if path_end == -1:
+            i = path_start
+            continue
+
+        caption = body[caption_start:caption_end]
+        path = body[path_start + 1:path_end]
+        
+        figures.append({
+            'path': path,
+            'caption': caption.strip(),
+            'source': f"markdown:{path}",
+            'line': body.count('\n', 0, i) + 1
+        })
+        
+        i = path_end
+
+    # 2. Find embed shortcodes and map generated images
+    embed_shortcodes = set(re.findall(r'\{\{<\s*embed\s+(.*?)\s*>\}\}', body))
+    generated_images = _find_quarto_generated_images(report_stem)
+
+    for img_path, img_caption in generated_images.items():
+        if any(f['path'] == img_path for f in figures): continue
+
+        matched_to_embed = False
+        notebook_name_from_file = Path(img_path).name.split('-')[0].lower()
+        
+        for shortcode in embed_shortcodes:
+            notebook_name_from_code = Path(shortcode.split('#')[0]).stem.lower()
+            if notebook_name_from_file == notebook_name_from_code:
+                figures.append({
+                    'path': img_path, 'caption': img_caption,
+                    'source': shortcode, 'line': -1
+                })
+                matched_to_embed = True
+                break
+        
+        if not matched_to_embed:
+            figures.append({
+                'path': img_path, 'caption': img_caption,
+                'source': 'generated:unmapped', 'line': -1
+            })
+            
+    return figures
+
+def _find_quarto_generated_images(report_stem: str) -> dict:
+    """Finds images generated by Quarto and returns a dict of {path: caption}."""
+    images = {}
+    search_paths = set([f"{report_stem}_files", "index_files"])
+    
+    print("   Scanning for Quarto-generated images...")
+    for path_str in search_paths:
+        parent_dir = Path(path_str)
+        if parent_dir.is_dir():
+            for fig_dir in parent_dir.glob('figure-*'):
+                if fig_dir.is_dir():
+                    for image_path in fig_dir.glob('*.png'):
+                        caption = f"Generated image from notebook cell: {image_path.name}"
+                        images[str(image_path)] = caption
+                        print(f"      Found generated image: {image_path}")
+    return images
+
+def _extract_structure(body: str) -> list:
+    headings = re.findall(r'^(#{1,6})\s+(.+)$', body, re.MULTILINE)
+    return [{'level': len(h[0]), 'text': h[1].strip()} for h in headings]
+
+def _calculate_stats(body: str, figure_count: int) -> dict:
+    text_only = re.sub(r'```.*?```|\{\{<.*?\}\}', '', body, flags=re.DOTALL)
+    text_only = re.sub(r'\$\$.*?\$\$|\$[^$]+\$', '', text_only, flags=re.DOTALL)
+    words = len(re.findall(r'\w+', text_only))
+
+    return {
+        'word_count': words,
+        'code_blocks': len(re.findall(r'```\{python\}.*?```', body, re.DOTALL)),
+        'equations': len(re.findall(r'\$\$.*?\$\$|\$[^$]+\$', body, re.DOTALL)),
+        'figures': figure_count,
+        'sections': len(_extract_structure(body))
+    }
+
+def _check_supplementary_files() -> dict:
     try:
-        with open('.github/feedback/config.yml') as f:
+        with open('.github/config.yml', 'r', encoding='utf-8') as f:
             config = yaml.safe_load(f)
-    except Exception as e:
-        print(f"WARNING: Could not load config for supplementary file check: {e}")
+    except Exception:
         return {}
 
     supplementary_files = config.get('supplementary_files', [])
     status = {}
-
     for pattern in supplementary_files:
-        # Use glob to check for files matching pattern
         matches = list(Path('.').glob(pattern))
         status[pattern] = {
             'exists': len(matches) > 0,
             'count': len(matches),
-            'files': [str(m) for m in matches[:5]]  # Limit to first 5 for brevity
+            'files': [str(p) for p in matches[:5]]
         }
-
     return status
 
 def main():
-    """Parse report and save results."""
-    # Load config to get report file path
     try:
-        with open('.github/feedback/config.yml') as f:
+        with open('.github/config.yml', 'r', encoding='utf-8') as f:
             config = yaml.safe_load(f)
     except FileNotFoundError:
-        print("ERROR: Configuration file not found at .github/feedback/config.yml")
-        sys.exit(1)
-    except Exception as e:
-        print(f"ERROR: Failed to load configuration: {e}")
-        sys.exit(1)
-
+        print("ERROR: .github/config.yml not found. Using default 'index.qmd'.", file=sys.stderr)
+        config = {}
+    
     report_file = config.get('report_file', 'index.qmd')
 
-    print(f"Parsing {report_file}...")
+    print(f"Parsing report file: {report_file}...")
     parsed = parse_quarto(report_file)
 
-    # Save parsed report
     try:
-        with open('parsed_report.json', 'w') as f:
-            json.dump(parsed, f, indent=2)
+        with open('parsed_report.json', 'w', encoding='utf-8') as f:
+            json.dump(parsed, f, indent=2, ensure_ascii=False)
     except Exception as e:
-        print(f"ERROR: Failed to save parsed report: {e}")
+        print(f"ERROR: Failed to save parsed report to 'parsed_report.json': {e}", file=sys.stderr)
         sys.exit(1)
 
-    # Print summary
-    print(f"✅ Parsed successfully:")
-    print(f"   - {parsed['stats']['word_count']} words")
-    print(f"   - {parsed['stats']['code_blocks']} code blocks")
-    print(f"   - {parsed['stats']['equations']} equations")
-    print(f"   - {parsed['stats']['figures']} figures")
-    print(f"   - {parsed['stats']['sections']} sections")
-
-    # Print supplementary file status
-    print(f"\n📂 Supplementary files:")
-    for pattern, status in parsed['supplementary'].items():
-        if status['exists']:
-            print(f"   ✅ {pattern}: {status['count']} file(s) found")
-        else:
-            print(f"   ⚠️  {pattern}: not found")
+    print("\n✅ Report parsed successfully:")
+    stats = parsed['stats']
+    print(f"   - {stats['word_count']} words")
+    print(f"   - {stats['figures']} figures (manual + generated)")
+    
+    manual_figs = sum(1 for f in parsed['figures']['details'] if f['source'].startswith('markdown:'))
+    mapped_figs = sum(1 for f in parsed['figures']['details'] if not f['source'].startswith('markdown:'))
+    print(f"     - {manual_figs} manually linked")
+    print(f"     - {mapped_figs} generated from notebooks")
 
 if __name__ == '__main__':
     main()
