@@ -27,15 +27,32 @@ cd your-assignment-repo
 
 ### 2. Customize for Your Assignment
 
+**Option A: Write Rubric in Markdown (Recommended - Easier!)**
+
 ```bash
 cd your-assignment-repo/.github/feedback
 
-# Option A: Copy from template (recommended for first-time setup)
-cp /path/to/ai-feedback-system/templates/config-template.yml config.yml
-cp /path/to/ai-feedback-system/templates/lab-rubric-template.yml rubric.yml
-cp /path/to/ai-feedback-system/templates/guidance-template.md guidance.md
+# Copy a markdown rubric example (easy to read and edit!)
+cp /path/to/ai-feedback-system/examples/phys-230-lab-example-RUBRIC.md RUBRIC.md
 
-# Option B: Copy from a course example (if similar assignment exists)
+# Edit RUBRIC.md in any text editor - it's just markdown!
+# Tables and bullet points - much easier than YAML
+
+# Convert to YAML for the system
+docker run --rm -v $PWD:/work -w /work ghcr.io/202420-phys-230/quarto:1 \
+  python3 .github/scripts/rubric_converter.py md-to-yaml RUBRIC.md rubric.yml
+
+# Customize config and guidance
+cp /path/to/ai-feedback-system/templates/config-template.yml config.yml
+cp /path/to/ai-feedback-system/templates/guidance-template.md guidance.md
+```
+
+**Option B: Write Rubric in YAML (Traditional)**
+
+```bash
+cd your-assignment-repo/.github/feedback
+
+# Copy templates or examples
 cp /path/to/ai-feedback-system/examples/eeng-320-lab-example.yml rubric.yml
 cp /path/to/ai-feedback-system/templates/config-template.yml config.yml
 cp /path/to/ai-feedback-system/templates/guidance-template.md guidance.md
@@ -168,6 +185,14 @@ Each feedback request creates a separate issue so you can track your progress.
 - Analyzes measurement tables, statistical results, computational outputs
 - More token-efficient than vision API for tabular data
 
+### Rubric Converter - Write in Markdown!
+- **Bidirectional converter** between YAML and Markdown
+- **Faculty**: Write rubrics in easy Markdown format
+- **Students**: Read beautiful rendered rubrics on GitHub
+- **System**: Automatically converts Markdown → YAML for deployment
+- Validates round-trip conversion (no data loss)
+- Examples for all course types included
+
 ### Multi-Course Support
 Four course examples included:
 - **EENG-320** (Electronics) - Circuit design, simulation, experimentation
@@ -186,6 +211,7 @@ Four course examples included:
 ## Documentation
 
 - **[INSTRUCTOR_GUIDE.md](INSTRUCTOR_GUIDE.md)** - Complete setup, customization, and troubleshooting guide
+- **[docs/RUBRIC_CONVERTER.md](docs/RUBRIC_CONVERTER.md)** - How to write rubrics in Markdown instead of YAML
 - **[TEMPLATE_SYSTEM.md](TEMPLATE_SYSTEM.md)** - Template system overview and workflow
 - **[DEPLOYMENT.md](DEPLOYMENT.md)** - Technical deployment details
 - **[.github/feedback/README.md](.github/feedback/README.md)** - Quick setup instructions
@@ -220,6 +246,7 @@ your-assignment-repo/
       parse_report.py          ← Parse student report & notebook outputs
       section_extractor.py     ← Extract relevant sections & augment with outputs
       html_to_markdown.py      ← Convert HTML tables to markdown
+      rubric_converter.py      ← Convert rubrics between YAML ↔ Markdown
       ai_feedback_criterion.py ← Generate AI feedback
       create_issue.py          ← Post feedback as GitHub Issue
       image_utils.py           ← Vision support utilities
