@@ -71,6 +71,7 @@ jobs:
         id: feedback
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ github.ref_name }}
         run: python .github/scripts/ai_feedback_criterion.py
         continue-on-error: false
 
@@ -82,6 +83,23 @@ jobs:
         run: python .github/scripts/create_issue.py
         continue-on-error: false
 
+      - name: Check debug upload setting
+        id: check-debug-upload
+        run: |
+          # Check if debug_mode.upload_artifacts is enabled
+          UPLOAD=$(python3 -c "
+          import yaml
+          try:
+              with open('.github/feedback/config.yml') as f:
+                  config = yaml.safe_load(f)
+              upload = config.get('debug_mode', {}).get('upload_artifacts', False)
+              print('true' if upload else 'false')
+          except:
+              print('false')
+          ")
+          echo "upload=$UPLOAD" >> $GITHUB_OUTPUT
+          echo "Debug artifact upload: $UPLOAD"
+
       - name: Upload artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -91,3 +109,14 @@ jobs:
             parsed_report.json
             feedback.md
           retention-days: 30
+
+      - name: Upload debug artifacts
+        # Only upload if explicitly enabled in config AND debug directory exists
+        # WARNING: Contains student work and grading prompts - use with caution!
+        if: always() && steps.check-debug-upload.outputs.upload == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: feedback-debug-${{ github.run_number }}
+          path: .github/debug/
+          retention-days: 30
+          if-no-files-found: ignore  # Don't fail if debug mode is disabled
