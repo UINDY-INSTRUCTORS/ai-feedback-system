@@ -10,6 +10,7 @@ import json
 import re
 import requests
 import sys
+import time
 from pathlib import Path
 from typing import Dict, Any, Tuple, List
 
@@ -248,8 +249,8 @@ def build_extraction_prompt(report: Dict[str, Any], criterion: Dict[str, Any]) -
 
 **Extracted Sections (relevant to "{criterion_name}"){max_content_note}:"""
 
-def call_extraction_api(prompt: str, model: str) -> str:
-    """Calls the GitHub Models API for text extraction."""
+def call_extraction_api(prompt: str, model: str, max_retries: int = 3) -> str:
+    """Calls the GitHub Models API for text extraction with exponential backoff retry."""
     token = os.environ.get('GITHUB_TOKEN')
     if not token:
         raise ValueError("GITHUB_TOKEN environment variable not set")
@@ -274,20 +275,55 @@ def call_extraction_api(prompt: str, model: str) -> str:
         "max_tokens": 4000
     }
 
-    response = requests.post(endpoint, headers=headers, json=payload, timeout=90)
-    response.raise_for_status()
-    result = response.json()
-    extracted = result['choices'][0]['message']['content'].strip()
+    # Retry loop with exponential backoff
+    last_error = None
 
-    usage = result.get('usage', {})
-    print(f"   Extraction tokens: {usage.get('total_tokens', 0)} (prompt: {usage.get('prompt_tokens', 0)}, completion: {usage.get('completion_tokens', 0)})")
+    for attempt in range(max_retries):
+        try:
+            response = requests.post(endpoint, headers=headers, json=payload, timeout=90)
+            response.raise_for_status()
+            result = response.json()
+            extracted = result['choices'][0]['message']['content'].strip()
 
-    # Log rate limit info if available
-    remaining = response.headers.get('x-ratelimit-remaining')
-    if remaining:
-        print(f"   Rate limit remaining: {remaining}")
+            usage = result.get('usage', {})
+            print(f"   Extraction tokens: {usage.get('total_tokens', 0)} (prompt: {usage.get('prompt_tokens', 0)}, completion: {usage.get('completion_tokens', 0)})")
 
-    return extracted
+            # Log rate limit info if available
+            remaining = response.headers.get('x-ratelimit-remaining')
+            if remaining:
+                print(f"   Rate limit remaining: {remaining}")
+
+            return extracted
+
+        except requests.exceptions.HTTPError as e:
+            last_error = e
+            if e.response.status_code == 429:
+                # Rate limited - implement backoff
+                if attempt < max_retries - 1:
+                    # Check for Retry-After header
+                    retry_after = e.response.headers.get('Retry-After')
+                    if retry_after:
+                        try:
+                            wait_time = int(retry_after)
+                        except (ValueError, TypeError):
+                            wait_time = 2 ** attempt
+                    else:
+                        # Exponential backoff: 1s, 2s, 4s, 8s, etc.
+                        wait_time = 2 ** attempt
+
+                    print(f"   ⚠️  Extraction rate limited (429). Waiting {wait_time}s before retry {attempt + 1}/{max_retries - 1}...")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    print(f"   ❌ Extraction rate limited after {max_retries} attempts. Giving up.")
+                    raise
+            else:
+                # Not a rate limit error - raise immediately
+                raise
+
+    # Should not reach here, but just in case
+    if last_error:
+        raise last_error
 
 if __name__ == '__main__':
     # A simple test function can be added here if needed

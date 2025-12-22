@@ -8,6 +8,7 @@ import json
 import yaml
 import requests
 import sys
+import time
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any, Tuple, List, Optional
@@ -306,10 +307,12 @@ def call_github_models_api(
     prompt: str,
     model: str,
     config: dict,
-    image_paths: Optional[List[str]] = None
+    image_paths: Optional[List[str]] = None,
+    max_retries: int = 3
 ) -> tuple:
     """
     Call GitHub Models API, handling both text and vision requests.
+    Implements exponential backoff retry on 429 rate limit errors.
 
     Returns:
         tuple: (feedback_text, response_data, request_payload)
@@ -336,7 +339,7 @@ def call_github_models_api(
                 user_content.append({"type": "image_url", "image_url": {"url": base64_data}})
             else:
                 print(f"   WARNING: Could not encode image {img_path}, skipping.")
-    
+
     messages.append({"role": "user", "content": user_content})
     # --- End message payload ---
 
@@ -348,27 +351,63 @@ def call_github_models_api(
         "max_tokens": config.get('max_output_tokens', 2000)
     }
 
-    print(f"   Calling {model} API... (images: {len(image_paths or [])})")
+    # Retry loop with exponential backoff
     timeout = config.get('request_timeout', 120)
-    response = requests.post(endpoint, headers=headers, json=payload, timeout=timeout)
-    response.raise_for_status()
+    last_error = None
 
-    result = response.json()
-    feedback = result['choices'][0]['message']['content']
+    for attempt in range(max_retries):
+        try:
+            print(f"   Calling {model} API... (images: {len(image_paths or [])}, attempt {attempt + 1}/{max_retries})")
+            response = requests.post(endpoint, headers=headers, json=payload, timeout=timeout)
+            response.raise_for_status()
 
-    usage = result.get('usage', {})
-    print(f"   ✅ Tokens: {usage.get('total_tokens', 0)} (prompt: {usage.get('prompt_tokens', 0)}, completion: {usage.get('completion_tokens', 0)})")
+            result = response.json()
+            feedback = result['choices'][0]['message']['content']
 
-    # Capture rate limit info from response headers
-    rate_limit_info = {
-        'limit': response.headers.get('x-ratelimit-limit'),
-        'remaining': response.headers.get('x-ratelimit-remaining'),
-        'reset': response.headers.get('x-ratelimit-reset'),
-        'retry_after': response.headers.get('retry-after'),
-    }
-    result['_rate_limit'] = {k: v for k, v in rate_limit_info.items() if v is not None}
+            usage = result.get('usage', {})
+            print(f"   ✅ Tokens: {usage.get('total_tokens', 0)} (prompt: {usage.get('prompt_tokens', 0)}, completion: {usage.get('completion_tokens', 0)})")
 
-    return feedback, result, payload
+            # Capture rate limit info from response headers
+            rate_limit_info = {
+                'limit': response.headers.get('x-ratelimit-limit'),
+                'remaining': response.headers.get('x-ratelimit-remaining'),
+                'reset': response.headers.get('x-ratelimit-reset'),
+                'retry_after': response.headers.get('retry-after'),
+            }
+            result['_rate_limit'] = {k: v for k, v in rate_limit_info.items() if v is not None}
+
+            return feedback, result, payload
+
+        except requests.exceptions.HTTPError as e:
+            last_error = e
+            if e.response.status_code == 429:
+                # Rate limited - implement backoff
+                if attempt < max_retries - 1:
+                    # Check for Retry-After header
+                    retry_after = e.response.headers.get('Retry-After')
+                    if retry_after:
+                        try:
+                            wait_time = int(retry_after)
+                        except (ValueError, TypeError):
+                            # If not an integer, use exponential backoff
+                            wait_time = 2 ** attempt
+                    else:
+                        # Exponential backoff: 1s, 2s, 4s, 8s, etc.
+                        wait_time = 2 ** attempt
+
+                    print(f"   ⚠️  Rate limited (429). Waiting {wait_time}s before retry {attempt + 1}/{max_retries - 1}...")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    print(f"   ❌ Rate limited after {max_retries} attempts. Giving up.")
+                    raise
+            else:
+                # Not a rate limit error - raise immediately
+                raise
+
+    # Should not reach here, but just in case
+    if last_error:
+        raise last_error
 
 
 def analyze_criterion(report: dict, criterion: dict, guidance: str, config: dict, criterion_index: int = 0) -> dict:
