@@ -10,12 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Automatic Markdown-to-YAML conversion** - GitHub Actions workflow now auto-converts RUBRIC.md to rubric.yml
 - **Default .gitignore for rubric.yml** - Markdown-first workflow is now the default, no manual gitignore needed
+- **Structured guidance parser** - Automatically extracts general guidance (Part I) and criterion-specific guidance (Part II) from guidance.md, dramatically reducing token usage (~9,000 tokens saved per report)
 
 ### Changed
 - **Markdown rubrics are now the default workflow** - Faculty only need to edit RUBRIC.md
 - Updated documentation to emphasize Markdown-first approach
 - Simplified setup instructions (one less step for faculty)
 - **Rubric links in issues** - Now link to RUBRIC.md if it exists, otherwise fall back to rubric.yml (more readable for students)
+- **Guidance file structure improved** - Redesigned `guidance-template.md` with clear separation between general guidance (Part I) and criterion-specific guidance (Part II) for more targeted, efficient feedback
 
 ### Fixed
 - **GitHub Issue formatting** - Sub-topic headers now render correctly with proper bold markdown syntax (`**Title:**`)

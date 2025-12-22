@@ -119,10 +119,93 @@ def save_debug_criterion_data(
 
 
 def get_criterion_guidance(guidance: str, criterion: dict) -> str:
-    """Extract relevant guidance for this specific criterion."""
-    # This is a placeholder; in a real system, this would extract
-    # specific guidance related to the criterion from the main guidance file.
-    return guidance # For now, return the whole thing
+    """
+    Extract relevant guidance for this specific criterion.
+
+    The guidance file has two parts:
+    - PART I: GENERAL GUIDANCE (applied to all criteria)
+    - PART II: CRITERION-SPECIFIC GUIDANCE (one section per criterion)
+
+    This function extracts:
+    - All of Part I
+    - The specific criterion section from Part II that matches this criterion's name
+
+    Returns combined guidance, or full guidance if structured format not found.
+    """
+    criterion_name = criterion.get('name', '')
+
+    # Split guidance into lines for processing
+    lines = guidance.split('\n')
+
+    # Extract Part I (General Guidance)
+    part1_start = None
+    part1_end = None
+
+    for i, line in enumerate(lines):
+        line_stripped = line.strip().upper()
+        # Only match markdown headers (lines starting with #)
+        # Check for Part II first to avoid substring match (Part I is in Part II)
+        if line_stripped.startswith('#') and 'PART II' in line_stripped:
+            part1_end = i
+            break
+        elif line_stripped.startswith('#') and 'PART I' in line_stripped:
+            part1_start = i
+
+    # If we don't find the structured format, return the whole guidance
+    if part1_start is None and part1_end is None:
+        return guidance
+
+    # Extract Part I text
+    if part1_start is not None and part1_end is not None:
+        general_guidance = '\n'.join(lines[part1_start:part1_end])
+    elif part1_end is not None:
+        # Part I marker not found, but Part II is - take everything before Part II
+        general_guidance = '\n'.join(lines[:part1_end])
+    else:
+        # No Part II found - return all guidance
+        return guidance
+
+    # Extract criterion-specific section from Part II
+    criterion_section = ""
+    criterion_header = f"## CRITERION: {criterion_name}"
+
+    # Find the criterion section
+    criterion_start = None
+    criterion_end = None
+
+    for i in range(part1_end, len(lines)):
+        line = lines[i].strip()
+
+        # Found the start of our criterion section
+        if line.startswith('## CRITERION:') and criterion_name in line:
+            criterion_start = i
+
+        # Found the start of the next criterion section (end of ours)
+        elif criterion_start is not None and line.startswith('## CRITERION:'):
+            criterion_end = i
+            break
+
+        # Found the end of Part II (could be a major section marker)
+        elif criterion_start is not None and line.startswith('# ') and 'CRITERION' not in line:
+            criterion_end = i
+            break
+
+    # Extract criterion-specific guidance
+    if criterion_start is not None:
+        if criterion_end is not None:
+            criterion_section = '\n'.join(lines[criterion_start:criterion_end])
+        else:
+            # This is the last criterion section, take until end of file
+            criterion_section = '\n'.join(lines[criterion_start:])
+
+    # Combine general + specific guidance
+    if criterion_section:
+        combined = general_guidance + '\n\n---\n\n' + criterion_section
+        return combined
+    else:
+        # No specific section found for this criterion, just return general guidance
+        # (Better than returning nothing - at least we have general context)
+        return general_guidance
 
 
 def build_criterion_prompt(report: dict, criterion: dict, guidance_excerpt: str, config: dict) -> tuple:
