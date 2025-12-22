@@ -15,11 +15,13 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: Install dependencies
+    - name: Install Python dependencies
       shell: bash
       run: |
-        pip install pyyaml requests quarto Pillow
-        quarto-cli install
+        pip install pyyaml requests Pillow
+
+    - name: Set up Quarto
+      uses: quarto-dev/quarto-actions/setup@v2
 
     - name: Render Quarto Report
       shell: bash
