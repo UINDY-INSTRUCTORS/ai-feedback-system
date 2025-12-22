@@ -185,8 +185,13 @@ def get_image_priority(figure: Dict[str, Any], priority_list: List[str]) -> int:
     return len(priority_list)
 
 def build_extraction_prompt(report: Dict[str, Any], criterion: Dict[str, Any]) -> str:
-    """Builds the prompt for the AI to extract relevant text sections."""
-    # This function remains largely the same as before
+    """Builds the prompt for the AI to extract relevant text sections.
+
+    Adapts comprehensiveness based on document size to manage token usage:
+    - Small docs (< 5000 words): Be comprehensive, extract all relevant content
+    - Medium docs (5000-10000 words): Be comprehensive but focus on most relevant
+    - Large docs (> 10000 words): Be selective, prioritize most directly relevant
+    """
     criterion_name = criterion.get('name', 'Unknown')
     criterion_desc = criterion.get('description', '')
     keywords = criterion.get('keywords', [])
@@ -194,7 +199,54 @@ def build_extraction_prompt(report: Dict[str, Any], criterion: Dict[str, Any]) -
     heading_list = "\n".join([f"{'  '*(h['level']-1)}- {h['text']}" for h in structure[:20]])
     full_content = report.get('content', '')
 
-    return f"""You are a technical report analyzer. Your task is to extract ONLY the sections of a student report that are relevant to evaluating a specific rubric criterion.\n\n**Rubric Criterion to Evaluate:**\n**{criterion_name}**\n{criterion_desc}\n\n**Keywords:** {', '.join(keywords)}\n\n**Report Structure:**\n{heading_list}\n\n**Your Task:**\n1.  Read the full report below.\n2.  Identify and extract ONLY the sections (text, headings, and any `{{< embed >}}` shortcodes) that are directly relevant to the criterion.\n3.  Return the extracted sections verbatim. Be selective.\n4.  If multiple sections are relevant, separate them with "---".\n\n**Full Report:**\n---\n{full_content}\n---\n\n**Extracted Sections (relevant to "{criterion_name}"):"""
+    # Calculate document size and adapt extraction strategy
+    content_word_count = len(full_content.split())
+
+    if content_word_count > 10000:
+        comprehensiveness_guidance = (
+            "3.  IMPORTANT: Focus on content directly relevant to this criterion. "
+            "If content is marginally relevant, you may skip it to stay concise. "
+            "Prioritize substance over comprehensiveness given the large document size."
+        )
+        max_content_note = "\n\nNOTE: This is a large document. Be selective to manage context size."
+    elif content_word_count > 5000:
+        comprehensiveness_guidance = (
+            "3.  IMPORTANT: Content relevant to this criterion may be scattered throughout the report. "
+            "Extract all clearly relevant content, but focus on the most important sections."
+        )
+        max_content_note = ""
+    else:
+        comprehensiveness_guidance = (
+            "3.  IMPORTANT: Content relevant to this criterion may be scattered throughout the report in multiple locations. "
+            "You MUST extract all relevant content, even if it appears in different sections. "
+            "Be comprehensive - it's better to include too much relevant content than to miss important details."
+        )
+        max_content_note = ""
+
+    return f"""You are a technical report analyzer. Your task is to extract sections of a student report that are relevant to evaluating a specific rubric criterion.
+
+**Rubric Criterion to Evaluate:**
+**{criterion_name}**
+{criterion_desc}
+
+**Keywords:** {', '.join(keywords)}
+
+**Report Structure:**
+{heading_list}
+
+**Your Task:**
+1.  Read the full report below carefully.
+2.  Identify and extract sections (text, headings, and any `{{< embed >}}` shortcodes) that are relevant to this criterion.
+{comprehensiveness_guidance}
+4.  Return the extracted sections verbatim, preserving headings and formatting.
+5.  If multiple sections are relevant, separate them with "---".
+
+**Full Report:**
+---
+{full_content}
+---
+
+**Extracted Sections (relevant to "{criterion_name}"){max_content_note}:"""
 
 def call_extraction_api(prompt: str, model: str) -> str:
     """Calls the GitHub Models API for text extraction."""
@@ -204,16 +256,24 @@ def call_extraction_api(prompt: str, model: str) -> str:
 
     endpoint = f"{API_BASE}/chat/completions"
     headers = {"Content-Type": "application/json", "Authorization": f"Bearer {token}"}
+
+    # Estimate tokens before making the API call (rough: ~4 chars per token)
+    estimated_prompt_tokens = len(prompt) // 4
+    estimated_total_tokens = estimated_prompt_tokens + 4000  # 4000 = max_tokens for response
+
+    if estimated_total_tokens > 15000:
+        print(f"   ⚠️  HIGH TOKEN USAGE: Estimated ~{estimated_total_tokens} tokens (prompt: {estimated_prompt_tokens}, output: 4000)")
+
     payload = {
         "model": model,
         "messages": [
-            {"role": "system", "content": "You are a precise document analyzer. Extract only the requested sections verbatim. Be selective and focused."},
+            {"role": "system", "content": "You are a thorough document analyzer. Extract relevant sections verbatim. Balance comprehensiveness with conciseness based on document size."},
             {"role": "user", "content": prompt}
         ],
         "temperature": 0.1,
         "max_tokens": 4000
     }
-    
+
     response = requests.post(endpoint, headers=headers, json=payload, timeout=90)
     response.raise_for_status()
     result = response.json()

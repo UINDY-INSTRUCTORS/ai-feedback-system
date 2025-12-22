@@ -227,6 +227,42 @@ def build_criterion_prompt(report: dict, criterion: dict, guidance_excerpt: str,
 
     max_score = criterion.get('weight', 0)
 
+    # Check if numerical scoring is enabled (defaults to false for formative assessment)
+    scoring_enabled = config.get('feedback', {}).get('scoring_enabled', False)
+
+    # Build JSON schema based on scoring setting
+    if scoring_enabled:
+        json_schema = f"""{{
+  "summary": "A concise, one-paragraph summary of your overall assessment for this criterion.",
+  "strengths": [
+    "A list of specific strengths of the student's work on this criterion."
+  ],
+  "areas_for_improvement": [
+    {{
+      "issue": "A specific, concise description of an area for improvement.",
+      "suggestion": "An actionable suggestion for how the student can improve."
+    }}
+  ],
+  "score": <A numerical score from 0 to {max_score}>,
+  "overall_assessment": "<One of: 'Excellent', 'Good', 'Poor'>"
+}}"""
+        scoring_instruction = f"Base your feedback and score on the rubric levels provided. The 'overall_assessment' should correspond to the rubric level that best describes the work. The 'score' must be an integer within the point range specified for that level in the rubric."
+    else:
+        json_schema = """{
+  "summary": "A concise, one-paragraph summary of your overall assessment for this criterion.",
+  "strengths": [
+    "A list of specific strengths of the student's work on this criterion."
+  ],
+  "areas_for_improvement": [
+    {
+      "issue": "A specific, concise description of an area for improvement.",
+      "suggestion": "An actionable suggestion for how the student can improve."
+    }
+  ],
+  "overall_assessment": "<The rubric level that best describes this work, e.g., 'Exemplary', 'Satisfactory', 'Developing', 'Unsatisfactory'>"
+}"""
+        scoring_instruction = "Base your feedback on the rubric levels provided. The 'overall_assessment' should be the exact rubric level name that best describes the work (e.g., 'Exemplary', 'Satisfactory', etc.)."
+
     prompt = f"""{guidance_excerpt}
 
 ## Your Task
@@ -240,22 +276,9 @@ Evaluate the following criterion based on the relevant sections extracted from t
 ## Output Format
 Your response MUST be a single JSON object. Do not include any text outside of this JSON object.
 The JSON object must have the following schema:
-{{
-  "summary": "A concise, one-paragraph summary of your overall assessment for this criterion.",
-  "strengths": [
-    "A list of specific strengths of the student's work on this criterion."
-  ],
-  "areas_for_improvement": [
-    {{
-      "issue": "A specific, concise description of an area for improvement.",
-      "suggestion": "An actionable suggestion for how the student can improve."
-    }}
-  ],
-  "score": <A numerical score from 0 to {max_score}>,
-  "overall_assessment": "<One of: 'Excellent', 'Good', 'Poor'>"
-}}
+{json_schema}
 
-Base your feedback and score on the rubric levels provided. The 'overall_assessment' should correspond to the rubric level that best describes the work. The 'score' must be an integer within the point range specified for that level in the rubric.
+{scoring_instruction}
 
 ## Report Sections Relevant to This Criterion
 ---

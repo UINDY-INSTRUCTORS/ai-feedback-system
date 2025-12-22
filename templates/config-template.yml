@@ -30,6 +30,17 @@ guidance:
   specificity: "high"      # high, medium, low
   include_examples: true
 
+# === FEEDBACK SETTINGS ===
+
+feedback:
+  # Scoring mode (formative assessment vs grading)
+  scoring_enabled: false   # If true, AI assigns numerical scores
+                           # If false (default), focuses on rubric levels only
+                           # Recommended: false for formative assessment
+
+  # Rubric levels will always be reported (e.g., Exemplary, Satisfactory, etc.)
+  # Numerical scores are optional and should be disabled for formative feedback
+
 # === AI MODEL SETTINGS ===
 
 model:

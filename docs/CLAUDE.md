@@ -2123,6 +2123,42 @@ lines = [f"**{title}:**"]  # Properly closed
 
 ---
 
+---
+
+## Bug Fix: Import Shadowing in create_issue.py
+
+**Problem**: `UnboundLocalError: cannot access local variable 'os' where it is not associated with a value`
+
+**Location**: `create_issue.py` line 111 in `build_issue_footer()`
+
+**Root Cause**: Added `import os.path` inside the function, which created a local variable `os` that shadowed the module-level `os` import. When trying to use `os.environ` later in the same function, Python couldn't find it.
+
+**Fix**: Removed the redundant `import os.path` statement. The `os` module is already imported at the module level, so `os.path.exists()` can be called directly.
+
+**Before**:
+```python
+def build_issue_footer(...):
+    repo = os.environ.get('GITHUB_REPOSITORY', 'test/repo')  # Uses module-level os
+    ...
+    import os.path  # ❌ Creates local 'os', shadows module-level import
+    if os.path.exists('.github/feedback/RUBRIC.md'):  # ❌ os is now local but not defined yet
+```
+
+**After**:
+```python
+def build_issue_footer(...):
+    repo = os.environ.get('GITHUB_REPOSITORY', 'test/repo')  # ✅ Uses module-level os
+    ...
+    if os.path.exists('.github/feedback/RUBRIC.md'):  # ✅ Uses module-level os
+```
+
+**Files Fixed**:
+- `ai-feedback-system/dot_github_folder/scripts/create_issue.py`
+- `test-student-repo/.github/scripts/create_issue.py`
+
+**Status**: ✅ **FIXED**
+
+---
+
 **Session Completed**: December 21, 2025
-**Status**: All changes implemented, tested, and documented
-**Note**: Guidance parser implementation pending (template ready, function exists but needs update)
+**Status**: All changes implemented, tested, documented, and bugs fixed

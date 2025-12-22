@@ -81,7 +81,7 @@ jobs:
           UPLOAD=$(python3 -c "
           import yaml
           try:
-              with open('.github/feedback/config.yml') as f:
+              with open('.github/config.yml') as f:
                   config = yaml.safe_load(f)
               upload = config.get('debug_mode', {}).get('upload_artifacts', False)
               print('true' if upload else 'false')

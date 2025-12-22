@@ -39,6 +39,16 @@ max_output_tokens: 3000    # Enough for detailed feedback per criterion
 # Truncation strategy if report is too long
 truncation_strategy: "smart"  # "smart" (keep headers + samples), "head" (first N tokens), "tail" (last N tokens)
 
+# Feedback settings
+feedback:
+  # Scoring mode (formative assessment vs grading)
+  scoring_enabled: false   # If true, AI assigns numerical scores
+                           # If false (default), focuses on rubric levels only
+                           # Recommended: false for formative assessment
+
+  # Rubric levels will always be reported (e.g., Exemplary, Satisfactory, etc.)
+  # Numerical scores are optional and should be disabled for formative feedback
+
 # GitHub Issue settings
 issue_label: "ai-feedback"
 issue_title_template: "📋 AI Feedback: {tag_name} ({date})"

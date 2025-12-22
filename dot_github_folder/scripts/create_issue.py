@@ -34,11 +34,14 @@ def create_github_issue(title: str, body: str, label: str):
         print(f"Response: {e.response.text}", file=sys.stderr)
         sys.exit(1)
 
-def format_feedback_body(feedback_data: list, rubric_data: dict) -> str:
+def format_feedback_body(feedback_data: list, rubric_data: dict, config: dict) -> str:
     """Formats the list of JSON feedback objects into a Markdown string."""
     body_parts = []
     rubric_criteria = {c['id']: c for c in rubric_data.get('criteria', [])}
-    
+
+    # Check if numerical scoring is enabled (defaults to false for formative assessment)
+    scoring_enabled = config.get('feedback', {}).get('scoring_enabled', False)
+
     for item in feedback_data:
         criterion_name = item.get('criterion', 'Unknown Criterion')
         body_parts.append(f"### {criterion_name}\n")
@@ -73,10 +76,15 @@ def format_feedback_body(feedback_data: list, rubric_data: dict) -> str:
         max_score = rubric_criterion.get('weight', 0)
 
         level = feedback.get('overall_assessment') or feedback.get('level') or feedback.get('overall_evaluation', 'N/A')
-        score = feedback.get('score', 'N/A')
 
         body_parts.append(f"**Assessment:** `{level}`")
-        body_parts.append(f"**Score:** `{score} / {max_score}`\n")
+
+        # Only display numerical score if scoring is enabled
+        if scoring_enabled:
+            score = feedback.get('score', 'N/A')
+            body_parts.append(f"**Score:** `{score} / {max_score}`\n")
+        else:
+            body_parts.append("")  # Add blank line for spacing
 
         summary_text = feedback.get('summary') or feedback.get('comments') or feedback.get('feedback') or feedback.get('justification')
         if summary_text and isinstance(summary_text, str):
@@ -108,7 +116,6 @@ def build_issue_footer(report_stats: dict, config: dict) -> str:
     model = config.get('model', {}).get('primary', 'gpt-4o')
 
     # Prefer linking to RUBRIC.md if it exists (more readable for students)
-    import os.path
     if os.path.exists('.github/feedback/RUBRIC.md'):
         rubric_file = 'RUBRIC.md'
     else:
@@ -131,7 +138,7 @@ def main():
         print(f"ERROR: Missing required file: {e.filename}", file=sys.stderr)
         sys.exit(1)
 
-    feedback_body = format_feedback_body(feedback_data, rubric_data)
+    feedback_body = format_feedback_body(feedback_data, rubric_data, config)
     footer = build_issue_footer(report_data.get('stats', {}), config)
 
     if is_local_test:
