@@ -1,0 +1,38 @@
+# Simple AI Report Feedback Workflow
+#
+# This workflow uses the AI Report Feedback action from ai-feedback-system.
+# Just copy this file to your .github/workflows/ directory and customize
+# the config files (.github/config.yml, .github/feedback/RUBRIC.md, etc.)
+#
+# To trigger feedback generation, push a tag:
+#   git tag feedback-submission-1
+#   git push origin feedback-submission-1
+
+name: AI Report Feedback
+
+on:
+  push:
+    tags:
+      - 'feedback-*'
+      - 'review-*'
+
+permissions:
+  contents: read
+  issues: write
+  models: read
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate AI Feedback
+        uses: UINDY-INSTRUCTORS/ai-feedback-system@main
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}

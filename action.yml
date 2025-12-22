@@ -1,0 +1,115 @@
+name: AI Report Feedback
+description: Generate AI-powered feedback on student reports using rubric criteria
+author: UINDY Instructors
+
+inputs:
+  github-token:
+    description: GitHub token for API calls
+    required: true
+
+outputs:
+  feedback-issue-url:
+    description: URL of the created feedback issue
+    value: ${{ steps.create-issue.outputs.issue-url }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install dependencies
+      shell: bash
+      run: |
+        pip install pyyaml requests quarto Pillow
+        quarto-cli install
+
+    - name: Render Quarto Report
+      shell: bash
+      run: |
+        # Render the report to generate figures from notebook cells.
+        # We continue on error so that if the student's code fails,
+        # the feedback process can still analyze the raw .qmd file.
+        quarto render
+      continue-on-error: true
+
+    - name: Convert Markdown rubric to YAML
+      shell: bash
+      run: |
+        # If RUBRIC.md exists, convert it to rubric.yml on-the-fly
+        # This allows faculty to only manage the Markdown version
+        if [ -f .github/feedback/RUBRIC.md ]; then
+          echo "Converting RUBRIC.md to rubric.yml..."
+          python ${{ github.action_path }}/dot_github_folder/scripts/rubric_converter.py md-to-yaml \
+            .github/feedback/RUBRIC.md \
+            .github/feedback/rubric.yml
+          echo "✅ Conversion complete"
+        else
+          echo "No RUBRIC.md found, using existing rubric.yml"
+        fi
+      continue-on-error: false
+
+    - name: Parse report
+      id: parse
+      shell: bash
+      run: python ${{ github.action_path }}/dot_github_folder/scripts/parse_report.py
+      continue-on-error: false
+
+    - name: Generate AI feedback
+      id: feedback
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        TAG_NAME: ${{ github.ref_name }}
+      run: python ${{ github.action_path }}/dot_github_folder/scripts/ai_feedback_criterion.py
+      continue-on-error: false
+
+    - name: Create feedback issue
+      id: create-issue
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        TAG_NAME: ${{ github.ref_name }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+      run: python ${{ github.action_path }}/dot_github_folder/scripts/create_issue.py
+      continue-on-error: false
+
+    - name: Check debug upload setting
+      id: check-debug-upload
+      shell: bash
+      run: |
+        # Check if debug_mode.upload_artifacts is enabled
+        UPLOAD=$(python3 -c "
+        import yaml
+        try:
+            with open('.github/config.yml') as f:
+                config = yaml.safe_load(f)
+            upload = config.get('debug_mode', {}).get('upload_artifacts', False)
+            print('true' if upload else 'false')
+        except:
+            print('false')
+        ")
+        echo "upload=$UPLOAD" >> $GITHUB_OUTPUT
+        echo "Debug artifact upload: $UPLOAD"
+
+    - name: Upload artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: feedback-artifacts
+        path: |
+          parsed_report.json
+          feedback.json
+        retention-days: 30
+
+    - name: Upload debug artifacts
+      # Only upload if explicitly enabled in config AND debug directory exists
+      # WARNING: Contains student work and grading prompts - use with caution!
+      if: always() && steps.check-debug-upload.outputs.upload == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: feedback-debug-${{ github.run_number }}
+        path: .github/debug/
+        retention-days: 30
+        if-no-files-found: ignore  # Don't fail if debug mode is disabled
+
+branding:
+  icon: book-open
+  color: blue
