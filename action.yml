@@ -18,7 +18,7 @@ runs:
     - name: Install Python dependencies
       shell: bash
       run: |
-        pip install pyyaml requests Pillow
+        pip install pyyaml requests Pillow jupyter nbformat
 
     - name: Set up Quarto
       uses: quarto-dev/quarto-actions/setup@v2
