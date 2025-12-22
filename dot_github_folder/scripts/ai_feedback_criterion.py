@@ -359,6 +359,15 @@ def call_github_models_api(
     usage = result.get('usage', {})
     print(f"   ✅ Tokens: {usage.get('total_tokens', 0)} (prompt: {usage.get('prompt_tokens', 0)}, completion: {usage.get('completion_tokens', 0)})")
 
+    # Capture rate limit info from response headers
+    rate_limit_info = {
+        'limit': response.headers.get('x-ratelimit-limit'),
+        'remaining': response.headers.get('x-ratelimit-remaining'),
+        'reset': response.headers.get('x-ratelimit-reset'),
+        'retry_after': response.headers.get('retry-after'),
+    }
+    result['_rate_limit'] = {k: v for k, v in rate_limit_info.items() if v is not None}
+
     return feedback, result, payload
 
 

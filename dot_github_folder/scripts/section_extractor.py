@@ -278,10 +278,15 @@ def call_extraction_api(prompt: str, model: str) -> str:
     response.raise_for_status()
     result = response.json()
     extracted = result['choices'][0]['message']['content'].strip()
-    
+
     usage = result.get('usage', {})
     print(f"   Extraction tokens: {usage.get('total_tokens', 0)} (prompt: {usage.get('prompt_tokens', 0)}, completion: {usage.get('completion_tokens', 0)})")
-    
+
+    # Log rate limit info if available
+    remaining = response.headers.get('x-ratelimit-remaining')
+    if remaining:
+        print(f"   Rate limit remaining: {remaining}")
+
     return extracted
 
 if __name__ == '__main__':
