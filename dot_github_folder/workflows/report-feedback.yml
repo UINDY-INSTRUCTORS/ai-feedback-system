@@ -30,6 +30,21 @@ jobs:
         run: |
           pip install pyyaml requests quarto quarto-cli Pillow
 
+      - name: Convert Markdown rubric to YAML
+        run: |
+          # If RUBRIC.md exists, convert it to rubric.yml on-the-fly
+          # This allows faculty to only manage the Markdown version
+          if [ -f .github/feedback/RUBRIC.md ]; then
+            echo "Converting RUBRIC.md to rubric.yml..."
+            python .github/scripts/rubric_converter.py md-to-yaml \
+              .github/feedback/RUBRIC.md \
+              .github/feedback/rubric.yml
+            echo "✅ Conversion complete"
+          else
+            echo "No RUBRIC.md found, using existing rubric.yml"
+          fi
+        continue-on-error: false
+
       - name: Render Quarto Report
         run: |
           # Render the report to generate figures from notebook cells.

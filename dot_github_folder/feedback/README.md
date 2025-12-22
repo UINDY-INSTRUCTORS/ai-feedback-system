@@ -2,6 +2,39 @@
 
 This directory contains the configuration for AI-powered feedback on student reports.
 
+## Recommended Workflow: Markdown-First Rubrics ⭐ (Default)
+
+**Markdown rubrics are now the default!** The `.gitignore` file already ignores `rubric.yml` since it's auto-generated.
+
+**Benefits:**
+- ✅ Easier to write (tables and bullet points)
+- ✅ Beautiful rendering on GitHub for students
+- ✅ No YAML syntax errors
+- ✅ No sync issues (single source of truth)
+- ✅ Already configured (rubric.yml is gitignored by default)
+
+**Setup:**
+```bash
+# Copy a Markdown example rubric
+cp examples/eeng-320-lab-example-RUBRIC.md .github/feedback/RUBRIC.md
+
+# Edit RUBRIC.md in your favorite editor
+vim .github/feedback/RUBRIC.md
+
+# That's it! Commit and push
+git add .github/feedback/RUBRIC.md
+git commit -m "Add rubric"
+```
+
+The GitHub Actions workflow automatically converts `RUBRIC.md` → `rubric.yml` before analysis.
+
+## Alternative: Traditional YAML Rubrics
+
+If you prefer YAML, you can:
+1. Remove `rubric.yml` from `.gitignore`
+2. Create/edit `rubric.yml` directly
+3. Delete `RUBRIC.md` if it exists (to avoid confusion)
+
 ## Quick Setup (3 Steps)
 
 ### 1. Customize Configuration Files

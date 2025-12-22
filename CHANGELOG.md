@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Automatic Markdown-to-YAML conversion** - GitHub Actions workflow now auto-converts RUBRIC.md to rubric.yml
+- **Default .gitignore for rubric.yml** - Markdown-first workflow is now the default, no manual gitignore needed
+
+### Changed
+- **Markdown rubrics are now the default workflow** - Faculty only need to edit RUBRIC.md
+- Updated documentation to emphasize Markdown-first approach
+- Simplified setup instructions (one less step for faculty)
+- **Rubric links in issues** - Now link to RUBRIC.md if it exists, otherwise fall back to rubric.yml (more readable for students)
+
+### Fixed
+- **GitHub Issue formatting** - Sub-topic headers now render correctly with proper bold markdown syntax (`**Title:**`)
+
 ## [1.0.0] - 2025-12-20
 
 ### Added

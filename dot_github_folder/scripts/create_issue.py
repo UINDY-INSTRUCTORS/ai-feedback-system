@@ -84,7 +84,7 @@ def format_feedback_body(feedback_data: list, rubric_data: dict) -> str:
 
         def format_list(title, points):
             if not points: return []
-            lines = [f"**{title}:"]
+            lines = [f"**{title}:**"]
             for point in points:
                 if isinstance(point, dict):
                     lines.append(f"- **{point.get('issue', 'Suggestion')}:** {point.get('suggestion', '')}")
@@ -106,7 +106,15 @@ def build_issue_footer(report_stats: dict, config: dict) -> str:
     repo = os.environ.get('GITHUB_REPOSITORY', 'test/repo')
     tag_name = os.environ.get('TAG_NAME', 'local-test')
     model = config.get('model', {}).get('primary', 'gpt-4o')
-    rubric_url = f"https://github.com/{repo}/blob/{tag_name}/.github/feedback/rubric.yml"
+
+    # Prefer linking to RUBRIC.md if it exists (more readable for students)
+    import os.path
+    if os.path.exists('.github/feedback/RUBRIC.md'):
+        rubric_file = 'RUBRIC.md'
+    else:
+        rubric_file = 'rubric.yml'
+
+    rubric_url = f"https://github.com/{repo}/blob/{tag_name}/.github/feedback/{rubric_file}"
     stats_table = f"| Metric | Count |\n|--------|-------|\n| Words | {report_stats.get('word_count', 0)} |\n| Figures | {report_stats.get('figures', 0)} |"
     return f"\n### 📚 Resources\n- [View Rubric]({rubric_url})\n\n### 📋 Report Statistics\n{stats_table}\n\n---\n*🤖 Powered by [GitHub Models](https://github.com/features/models) ({model}).*"
 

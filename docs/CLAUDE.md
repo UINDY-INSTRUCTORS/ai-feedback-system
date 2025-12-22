@@ -1902,20 +1902,171 @@ GitHub Actions Workflow Triggered
 
 # Session 7 - Issues to Address - December 21, 2025
 
-## Current Issues
+## Workflow Improvement: Markdown-First Rubrics
 
-### Issue 1: Sub-topic Formatting in GitHub Issues
+### Enhancement: Auto-Convert RUBRIC.md → rubric.yml
 
-**Problem**: Sub-topics in the feedback issues are not rendering correctly. They appear to be missing the trailing `**` bold markers.
+**User Suggestion**: "What if we have the faculty member only work with a markdown rubric, and have the action convert to yaml when the action is executed. It wouldn't need to be saved in the repo since it could always be reconstructed using the md-to-yaml conversion."
 
-**Location**: `.github/scripts/create_issue.py`
+**Implementation**:
 
-**Impact**: Feedback formatting in GitHub Issues may not display properly
+1. **Updated GitHub Actions Workflow** (`.github/workflows/report-feedback.yml`)
+   - Added conversion step after dependencies installation
+   - Checks for `RUBRIC.md` existence
+   - Converts to `rubric.yml` on-the-fly if found
+   - Falls back to existing `rubric.yml` if no Markdown version
 
-**Status**: ⏳ To be fixed in next session (deferred to conserve token usage)
+2. **Created `.gitignore` Template**
+   - Added `gitignore_template` in `.github/feedback/`
+   - Recommends ignoring `rubric.yml` when using Markdown workflow
 
-**Next Steps**:
-- Review create_issue.py formatting logic
-- Check how sub-topic headers are constructed
-- Ensure proper markdown bold syntax (`**text**`)
-- Test with sample feedback output
+3. **Updated Documentation**
+   - `.github/feedback/README.md` - Added "Recommended Workflow" section
+   - `README.md` - Updated Option A to reflect auto-conversion
+   - Emphasized benefits of Markdown-first approach
+
+**Benefits**:
+- ✅ Faculty only manage one file (RUBRIC.md)
+- ✅ No risk of YAML/Markdown getting out of sync
+- ✅ Simpler git history (no auto-generated files)
+- ✅ Markdown is single source of truth
+- ✅ Transparent to faculty (happens automatically)
+- ✅ Backward compatible (still supports YAML-only workflow)
+
+**Workflow**:
+```bash
+# Faculty edits RUBRIC.md
+vim .github/feedback/RUBRIC.md
+
+# Commits only the Markdown
+git add .github/feedback/RUBRIC.md
+git commit -m "Update rubric"
+
+# GitHub Actions automatically converts to YAML when student requests feedback
+# No manual conversion needed!
+```
+
+**Status**: ✅ **IMPLEMENTED**
+
+### Follow-up: Make rubric.yml Gitignored by Default
+
+**User Request**: "Let's make rubric.yml in .gitignore by default."
+
+**Changes Made**:
+
+1. **Created `.gitignore` files** in both repositories:
+   - `ai-feedback-system/dot_github_folder/feedback/.gitignore`
+   - `test-student-repo/.github/feedback/.gitignore`
+   - Both include `rubric.yml` by default
+
+2. **Updated Documentation**:
+   - `.github/feedback/README.md`: Changed to "Markdown-First Rubrics ⭐ (Default)"
+   - `README.md`: Changed to "Recommended - Default!"
+   - Removed manual gitignore step from setup instructions
+
+3. **Removed Template File**:
+   - Deleted `gitignore_template` (no longer needed)
+
+**Result**: Markdown-first workflow is now the **default behavior**. Faculty who copy the system get:
+- ✅ `.gitignore` already configured
+- ✅ `rubric.yml` automatically ignored
+- ✅ No manual configuration needed
+- ✅ Simpler setup (one less step)
+
+YAML-only workflow still supported by:
+1. Removing `rubric.yml` from `.gitignore`
+2. Creating `rubric.yml` directly
+3. Deleting `RUBRIC.md` if present
+
+**Status**: ✅ **COMPLETE - NOW THE DEFAULT**
+
+---
+
+## Bug Fix: Sub-topic Formatting in GitHub Issues
+
+**Problem**: Sub-topics in the feedback issues were not rendering correctly. They were missing the trailing `**` bold markers.
+
+**Location**: `.github/scripts/create_issue.py` line 87
+
+**Root Cause**: The `format_list()` function had:
+```python
+lines = [f"**{title}:"]  # Missing closing **
+```
+
+**Fix**: Added closing `**` for proper markdown bold formatting:
+```python
+lines = [f"**{title}:**"]  # Properly closed
+```
+
+**Impact**: Feedback section headers now render correctly as bold in GitHub Issues:
+- **Strengths:**
+- **Areas for Improvement:**
+- **Image-specific Feedback:**
+- **Actionable Suggestions:**
+
+**Files Updated**:
+- `ai-feedback-system/dot_github_folder/scripts/create_issue.py`
+- `test-student-repo/.github/scripts/create_issue.py`
+
+**Status**: ✅ **FIXED**
+
+---
+
+## Session 7 Summary
+
+### Changes Made
+
+1. **Markdown-First Rubric Workflow** (Auto-conversion)
+   - Updated GitHub Actions workflow to auto-convert RUBRIC.md → rubric.yml
+   - Added conversion step in both repositories
+   - Backward compatible (still supports YAML-only workflow)
+
+2. **Default .gitignore for rubric.yml**
+   - Created `.gitignore` in `.github/feedback/` (both repos)
+   - rubric.yml now ignored by default
+   - Simplified setup (no manual gitignore step needed)
+
+3. **Documentation Updates**
+   - Updated `.github/feedback/README.md` - "Markdown-First Rubrics ⭐ (Default)"
+   - Updated `README.md` - Simplified Option A setup
+   - Emphasized Markdown as the recommended default workflow
+
+4. **Bug Fix: GitHub Issue Formatting**
+   - Fixed missing closing `**` in `create_issue.py`
+   - Sub-topic headers now render correctly as bold
+   - Fixed in both repositories
+
+5. **Rubric Links in Issues**
+   - Updated `build_issue_footer()` in `create_issue.py`
+   - Now checks if RUBRIC.md exists
+   - Links to RUBRIC.md if present (more readable for students)
+   - Falls back to rubric.yml if RUBRIC.md doesn't exist
+   - Updated in both repositories
+
+6. **CHANGELOG Updated**
+   - Added Session 7 changes to [Unreleased] section
+   - Documented auto-conversion feature
+   - Documented formatting fix
+   - Documented improved rubric linking
+
+### Files Modified
+
+- `.github/workflows/report-feedback.yml` (both repos) - Added conversion step
+- `.github/feedback/.gitignore` (both repos) - Created with rubric.yml
+- `.github/scripts/create_issue.py` (both repos) - Fixed bold formatting + improved rubric linking
+- `.github/feedback/README.md` - Updated to show Markdown as default
+- `README.md` - Simplified setup instructions
+- `CHANGELOG.md` - Added Session 7 changes
+- `docs/CLAUDE.md` - Documented session
+
+### Impact
+
+- ✅ **Simpler faculty workflow** - Only edit RUBRIC.md
+- ✅ **No sync issues** - Single source of truth
+- ✅ **Better defaults** - Markdown-first out of the box
+- ✅ **Cleaner repos** - No auto-generated files in git
+- ✅ **Better formatting** - Issues display correctly
+- ✅ **Better student experience** - Rubric links point to readable Markdown instead of YAML
+
+**Session Completed**: December 21, 2025
+**Status**: All changes implemented, tested, and documented
