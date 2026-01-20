@@ -147,23 +147,13 @@ def _find_quarto_generated_images(report_stem: str) -> dict:
     search_base_dirs = [Path("."), Path("output")]
 
     print("   Scanning for Quarto-generated images...")
-    print(f"      Working directory: {Path.cwd()}")
     for base_dir in search_base_dirs:
-        print(f"      Checking base_dir: {base_dir}")
-        if not base_dir.exists():
-            print(f"        → Does not exist, skipping")
-            continue
         for base_name in base_names:
             parent_dir = base_dir / base_name
-            print(f"        Checking parent_dir: {parent_dir} (is_dir={parent_dir.is_dir()})")
             if parent_dir.is_dir():
-                fig_dirs = list(parent_dir.glob('figure-*'))
-                print(f"          Found {len(fig_dirs)} figure-* dirs")
-                for fig_dir in fig_dirs:
+                for fig_dir in parent_dir.glob('figure-*'):
                     if fig_dir.is_dir():
-                        png_files = list(fig_dir.glob('*.png'))
-                        print(f"            Found {len(png_files)} PNG files in {fig_dir.name}")
-                        for image_path in png_files:
+                        for image_path in fig_dir.glob('*.png'):
                             caption = f"Generated image from notebook cell: {image_path.name}"
                             images[str(image_path)] = caption
                             print(f"      Found generated image: {image_path}")
