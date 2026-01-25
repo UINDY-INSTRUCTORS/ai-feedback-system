@@ -20,6 +20,13 @@ runs:
       run: |
         pip install pyyaml requests Pillow jupyter nbformat
 
+    - name: Validate feedback configuration
+      shell: bash
+      run: |
+        echo "Validating AI feedback setup..."
+        python ${{ github.action_path }}/dot_github_folder/scripts/validate_feedback_setup.py
+      continue-on-error: false
+
     - name: Set up Quarto
       uses: quarto-dev/quarto-actions/setup@v2
 
