@@ -90,8 +90,8 @@ def should_enable_vision_for_criterion(
     if explicitly_enabled:
         return True
 
-    # If auto-detect is enabled, check if images exist for this criterion
-    if vision_config.get('auto_detect_images', False):
+    # If auto-detect is enabled (default), check if images exist for this criterion
+    if vision_config.get('auto_detect_images', True):
         # Run a lightweight image detection (without full filtering)
         has_images = criterion_has_images(report, criterion, extracted_text)
         if has_images:
