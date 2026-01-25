@@ -72,11 +72,15 @@ def extract_sections_for_criterion_ai(
 def augment_with_notebook_outputs(report: Dict[str, Any], extracted_text: str) -> str:
     """
     Replace embed shortcodes with their corresponding notebook outputs.
-    This prevents the AI from seeing raw {{< embed ... >}} syntax and instead
-    shows the actual embedded content.
+    This prevents the AI from seeing raw {{< embed ... >}} syntax.
 
-    For example, {{< embed P01-Euler.ipynb#raw_data_table >}} gets replaced
-    with the actual table content from the notebook.
+    - If the output has text content (tables, markdown, text), replace with content
+    - If the output is image-only, replace with a descriptor like "(Figure: Plot data)"
+    - This way the AI knows figures are present even if vision isn't enabled
+
+    For example:
+    - {{< embed P01-Euler.ipynb#raw_data_table >}} → actual table content
+    - {{< embed P01-Euler.ipynb#plot >}} → "(Figure: Comparison plot)"
     """
     # Find all embed shortcodes in the extracted text
     embed_pattern = r'\{\{<\s*embed\s+([^\s]+)\s*>\}\}'
@@ -99,33 +103,47 @@ def augment_with_notebook_outputs(report: Dict[str, Any], extracted_text: str) -
             outputs = nb_output.get('outputs', {})
             cell_id = nb_output.get('cell_id', 'unknown')
 
-            # Format the notebook outputs for AI readability
-            output_text = f"\n**[Embedded Output from {cell_id}]**\n\n"
+            # Try to build content from text outputs
+            output_text = ""
 
             # Add HTML tables (converted to markdown)
-            if 'html_as_markdown' in outputs:
+            if 'html_as_markdown' in outputs and outputs['html_as_markdown']:
+                output_text += f"\n**[Embedded Output from {cell_id}]**\n\n"
                 for table in outputs['html_as_markdown']:
                     output_text += f"{table}\n\n"
 
             # Add markdown outputs
-            if 'markdown' in outputs:
+            if 'markdown' in outputs and outputs['markdown']:
+                if not output_text:
+                    output_text = f"\n**[Embedded Output from {cell_id}]**\n\n"
                 for md in outputs['markdown']:
                     output_text += f"{md}\n\n"
 
             # Add text outputs
-            if 'text' in outputs:
+            if 'text' in outputs and outputs['text']:
+                if not output_text:
+                    output_text = f"\n**[Embedded Output from {cell_id}]**\n\n"
                 for text in outputs['text']:
                     output_text += f"```\n{text}\n```\n\n"
 
             # Add LaTeX outputs
-            if 'latex' in outputs:
+            if 'latex' in outputs and outputs['latex']:
+                if not output_text:
+                    output_text = f"\n**[Embedded Output from {cell_id}]**\n\n"
                 for latex in outputs['latex']:
                     output_text += f"{latex}\n\n"
 
-            # Store the replacement (shortcode pattern -> actual content)
+            # If NO text content found but this is an embedded cell,
+            # use a descriptor (the actual figure will be passed via vision)
+            if not output_text:
+                # Clean up cell_id for better readability
+                cell_label = cell_id.replace('_', ' ').title()
+                output_text = f"\n**[Figure: {cell_label}]**\n"
+
+            # Store the replacement (shortcode pattern -> actual content or descriptor)
             embed_replacements[embed_ref] = output_text.strip()
 
-    # Replace all embed shortcodes with their actual content
+    # Replace all embed shortcodes with their actual content or descriptors
     if embed_replacements:
         augmented_text = extracted_text
         for embed_ref, content in embed_replacements.items():
@@ -133,7 +151,7 @@ def augment_with_notebook_outputs(report: Dict[str, Any], extracted_text: str) -
             shortcode_pattern = r'\{\{<\s*embed\s+' + re.escape(embed_ref) + r'\s*>\}\}'
             augmented_text = re.sub(shortcode_pattern, content, augmented_text)
 
-        print(f"   Replaced {len(embed_replacements)} embed shortcode(s) with actual notebook output(s)")
+        print(f"   Replaced {len(embed_replacements)} embed shortcode(s)")
         return augmented_text
 
     return extracted_text
