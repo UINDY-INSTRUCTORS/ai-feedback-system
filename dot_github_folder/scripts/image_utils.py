@@ -175,6 +175,12 @@ def estimate_image_tokens(image_path: str, max_dimension: Optional[int] = None) 
         if not Path(image_path).exists():
             return 0
 
+        # Without PIL, return a conservative estimate based on file size
+        if not HAS_PIL:
+            file_size = os.path.getsize(image_path)
+            # Rough estimate: ~1 token per 500 bytes of image data
+            return 85 + (file_size // 500)
+
         with Image.open(image_path) as img:
             width, height = img.size
 
@@ -269,11 +275,16 @@ def validate_image_file(image_path: str, supported_formats: List[str] = None) ->
         print(f"WARNING: Unsupported image format: {ext} (supported: {supported_formats})")
         return False
 
-    # Try to open it
-    try:
-        with Image.open(image_path) as img:
-            img.verify()
+    # Try to open it with PIL if available, otherwise just check existence (already done above)
+    if HAS_PIL:
+        try:
+            with Image.open(image_path) as img:
+                img.verify()
+            return True
+        except Exception as e:
+            print(f"WARNING: Invalid image file {image_path}: {e}")
+            return False
+    else:
+        # Without PIL, just verify the file exists and has correct extension
+        # (existence already checked above, format already checked above)
         return True
-    except Exception as e:
-        print(f"WARNING: Invalid image file {image_path}: {e}")
-        return False
