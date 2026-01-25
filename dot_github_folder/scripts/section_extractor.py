@@ -71,31 +71,36 @@ def extract_sections_for_criterion_ai(
 
 def augment_with_notebook_outputs(report: Dict[str, Any], extracted_text: str) -> str:
     """
-    Find notebook outputs that correspond to embeds in the extracted text
-    and append them in a readable format.
+    Replace embed shortcodes with their corresponding notebook outputs.
+    This prevents the AI from seeing raw {{< embed ... >}} syntax and instead
+    shows the actual embedded content.
+
+    For example, {{< embed P01-Euler.ipynb#raw_data_table >}} gets replaced
+    with the actual table content from the notebook.
     """
     # Find all embed shortcodes in the extracted text
-    embeds_in_text = set(re.findall(r'\{\{<\s*embed\s+(.*?)\s*>\}\}', extracted_text))
+    embed_pattern = r'\{\{<\s*embed\s+([^\s]+)\s*>\}\}'
+    embeds_found = re.findall(embed_pattern, extracted_text)
 
-    if not embeds_in_text:
+    if not embeds_found:
         return extracted_text
 
     # Get notebook outputs from the report
     notebook_outputs = report.get('notebook_outputs', [])
-
     if not notebook_outputs:
         return extracted_text
 
-    # Build additional context from notebook outputs
-    additional_context = []
+    # Build a map of embed references to their formatted content
+    embed_replacements = {}
 
     for nb_output in notebook_outputs:
-        if nb_output['embed'] in embeds_in_text:
-            outputs = nb_output['outputs']
+        embed_ref = nb_output.get('embed', '')
+        if embed_ref in embeds_found:
+            outputs = nb_output.get('outputs', {})
             cell_id = nb_output.get('cell_id', 'unknown')
 
             # Format the notebook outputs for AI readability
-            output_text = f"\n\n### Notebook Output from {{{{< embed {nb_output['embed']} >}}}}\n\n"
+            output_text = f"\n**[Embedded Output from {cell_id}]**\n\n"
 
             # Add HTML tables (converted to markdown)
             if 'html_as_markdown' in outputs:
@@ -117,13 +122,19 @@ def augment_with_notebook_outputs(report: Dict[str, Any], extracted_text: str) -
                 for latex in outputs['latex']:
                     output_text += f"{latex}\n\n"
 
-            additional_context.append(output_text)
+            # Store the replacement (shortcode pattern -> actual content)
+            embed_replacements[embed_ref] = output_text.strip()
 
-    # Append all notebook outputs to the extracted text
-    if additional_context:
-        augmented = extracted_text + "\n\n" + "---\n\n".join(additional_context)
-        print(f"   Added {len(additional_context)} notebook output(s) to extracted text")
-        return augmented
+    # Replace all embed shortcodes with their actual content
+    if embed_replacements:
+        augmented_text = extracted_text
+        for embed_ref, content in embed_replacements.items():
+            # Build the exact shortcode pattern to replace
+            shortcode_pattern = r'\{\{<\s*embed\s+' + re.escape(embed_ref) + r'\s*>\}\}'
+            augmented_text = re.sub(shortcode_pattern, content, augmented_text)
+
+        print(f"   Replaced {len(embed_replacements)} embed shortcode(s) with actual notebook output(s)")
+        return augmented_text
 
     return extracted_text
 
