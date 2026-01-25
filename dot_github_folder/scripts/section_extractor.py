@@ -340,6 +340,21 @@ def build_extraction_prompt(report: Dict[str, Any], criterion: Dict[str, Any]) -
         )
         max_content_note = ""
 
+    # Special guidance for Results & Validation criterion
+    # This criterion needs context about HOW results were obtained, not just the final results
+    results_validation_note = ""
+    if "validation" in criterion_name.lower() or "results" in criterion_name.lower():
+        results_validation_note = (
+            "\n\n**SPECIAL NOTE for Results & Validation:**\n"
+            "To properly evaluate results, you MUST include any sections that describe:\n"
+            "- How the final value was determined (iterative exploration, testing multiple values)\n"
+            "- Evidence of testing different parameter values (e.g., 'tested b = 0.003, 0.004, 0.005')\n"
+            "- Any discussion of the validation process or methodology\n"
+            "- Comparison graphs or validation evidence\n\n"
+            "This means you should include relevant parts of Implementation, Methods, or Algorithm sections "
+            "if they contain evidence of the validation process or parameter exploration."
+        )
+
     return f"""You are a technical report analyzer. Your task is to extract sections of a student report that are relevant to evaluating a specific rubric criterion.
 
 **Rubric Criterion to Evaluate:**
@@ -349,7 +364,7 @@ def build_extraction_prompt(report: Dict[str, Any], criterion: Dict[str, Any]) -
 **Keywords:** {', '.join(keywords)}
 
 **Report Structure:**
-{heading_list}
+{heading_list}{results_validation_note}
 
 **Your Task:**
 1.  Read the full report below carefully.
