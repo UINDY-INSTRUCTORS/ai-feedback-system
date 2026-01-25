@@ -50,13 +50,22 @@ def extract_sections_for_criterion_ai(
     if vision_config.get('enabled', False):
         enabled_for = vision_config.get('enabled_for_criteria', [])
         criterion_id = criterion.get('id', '')
-        if '*' in enabled_for or criterion_id in enabled_for:
-            print(f"   Vision enabled for '{criterion_id}', extracting images...")
+        criterion_name = criterion.get('name', '')
+
+        # Check if vision is enabled for this criterion (by ID or name)
+        vision_enabled = (
+            '*' in enabled_for or
+            criterion_id in enabled_for or
+            criterion_name in enabled_for
+        )
+
+        if vision_enabled:
+            print(f"   Vision enabled for '{criterion_name}', extracting images...")
             image_paths = extract_relevant_images(
                 report, criterion, vision_config, extracted_text
             )
         else:
-            print(f"   Vision disabled for '{criterion_id}'.")
+            print(f"   Vision disabled for '{criterion_name}'.")
 
     return extracted_text, image_paths
 
