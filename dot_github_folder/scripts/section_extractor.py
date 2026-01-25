@@ -340,35 +340,34 @@ def build_extraction_prompt(report: Dict[str, Any], criterion: Dict[str, Any]) -
         )
         max_content_note = ""
 
-    # Special guidance for Results & Validation criterion
-    # This criterion needs context about HOW results were obtained, not just the final results
-    results_validation_note = ""
-    if "validation" in criterion_name.lower() or "results" in criterion_name.lower():
-        results_validation_note = (
-            "\n\n**SPECIAL NOTE for Results & Validation:**\n"
-            "To properly evaluate results, you MUST include any sections that describe:\n"
-            "- How the final value was determined (iterative exploration, testing multiple values)\n"
-            "- Evidence of testing different parameter values (e.g., 'tested b = 0.003, 0.004, 0.005')\n"
-            "- Any discussion of the validation process or methodology\n"
-            "- Comparison graphs or validation evidence\n\n"
-            "This means you should include relevant parts of Implementation, Methods, or Algorithm sections "
-            "if they contain evidence of the validation process or parameter exploration."
-        )
-
     return f"""You are a technical report analyzer. Your task is to extract sections of a student report that are relevant to evaluating a specific rubric criterion.
 
 **Rubric Criterion to Evaluate:**
 **{criterion_name}**
+
+**Criterion Description:**
 {criterion_desc}
 
-**Keywords:** {', '.join(keywords)}
-
 **Report Structure:**
-{heading_list}{results_validation_note}
+{heading_list}
 
 **Your Task:**
+
+**STEP 1: Identify Relevant Sections**
+
+Based on the criterion description above and the report structure, decide which sections of the report would help you evaluate this criterion. Consider:
+- Sections that directly address the criterion topic
+- Sections that provide context, methodology, or evidence for the criterion
+- Sections that show the student's reasoning or process
+- Sections that demonstrate mastery or struggle with the criterion
+
+Do NOT limit yourself to keyword matching. Think about what information would help someone understand if the student has met this criterion.
+
+**STEP 2: Extract and Return**
+
+Once you've identified the relevant sections:
 1.  Read the full report below carefully.
-2.  Identify and extract sections (text, headings, and any `{{< embed >}}` shortcodes) that are relevant to this criterion.
+2.  Extract the sections you identified (text, headings, and any `{{< embed >}}` shortcodes) verbatim.
 {comprehensiveness_guidance}
 4.  Return the extracted sections verbatim, preserving headings and formatting.
 5.  If multiple sections are relevant, separate them with "---".
