@@ -47,19 +47,10 @@ def extract_sections_for_criterion_ai(
     # 3. Extract relevant images based on the extracted text
     image_paths = []
     vision_config = config.get('vision', {})
+    criterion_name = criterion.get('name', '')
+
     if vision_config.get('enabled', False):
-        enabled_for = vision_config.get('enabled_for_criteria', [])
-        criterion_id = criterion.get('id', '')
-        criterion_name = criterion.get('name', '')
-
-        # Check if vision is enabled for this criterion (by ID or name)
-        vision_enabled = (
-            '*' in enabled_for or
-            criterion_id in enabled_for or
-            criterion_name in enabled_for
-        )
-
-        if vision_enabled:
+        if should_enable_vision_for_criterion(report, criterion, vision_config, extracted_text):
             print(f"   Vision enabled for '{criterion_name}', extracting images...")
             image_paths = extract_relevant_images(
                 report, criterion, vision_config, extracted_text
@@ -68,6 +59,84 @@ def extract_sections_for_criterion_ai(
             print(f"   Vision disabled for '{criterion_name}'.")
 
     return extracted_text, image_paths
+
+def should_enable_vision_for_criterion(
+    report: Dict[str, Any],
+    criterion: Dict[str, Any],
+    vision_config: Dict[str, Any],
+    extracted_text: str
+) -> bool:
+    """
+    Determine if vision should be enabled for this criterion.
+
+    Strategy:
+    1. Check explicit config (enabled_for_criteria list)
+    2. If auto_detect_images is enabled and criterion isn't explicitly configured,
+       check if images actually exist for this criterion
+
+    Returns True if vision should be enabled, False otherwise.
+    """
+    enabled_for = vision_config.get('enabled_for_criteria', [])
+    criterion_id = criterion.get('id', '')
+    criterion_name = criterion.get('name', '')
+
+    # Check explicit config first
+    explicitly_enabled = (
+        '*' in enabled_for or
+        criterion_id in enabled_for or
+        criterion_name in enabled_for
+    )
+
+    if explicitly_enabled:
+        return True
+
+    # If auto-detect is enabled, check if images exist for this criterion
+    if vision_config.get('auto_detect_images', False):
+        # Run a lightweight image detection (without full filtering)
+        has_images = criterion_has_images(report, criterion, extracted_text)
+        if has_images:
+            return True
+
+    return False
+
+def criterion_has_images(
+    report: Dict[str, Any],
+    criterion: Dict[str, Any],
+    extracted_text: str
+) -> bool:
+    """
+    Lightweight check: does this criterion have any relevant images?
+    Returns True if at least one image would be extracted for this criterion.
+    """
+    all_figures = report.get('figures', {}).get('details', [])
+    if not all_figures:
+        return False
+
+    # Strategy 1: Check for embed shortcodes in extracted text
+    embeds_in_text = set(re.findall(r'\{\{<\s*embed\s+(.*?)\s*>\}\}', extracted_text))
+    for fig in all_figures:
+        if fig['source'] in embeds_in_text:
+            if validate_image_file(fig['path']):
+                return True
+
+    # Strategy 2: Check for unmapped generated images
+    for fig in all_figures:
+        if fig['source'] == 'generated:unmapped':
+            if validate_image_file(fig['path']):
+                return True
+
+    # Strategy 3: Check for keyword-matched manual images
+    search_terms = set(criterion.get('keywords', []))
+    search_terms.update(re.findall(r'\w+', criterion.get('name', '').lower()))
+
+    for fig in all_figures:
+        if fig['source'].startswith('markdown:'):
+            search_text = fig['caption'].lower()
+            if any(term.lower() in search_text for term in search_terms):
+                if validate_image_file(fig['path']):
+                    return True
+
+    return False
 
 def augment_with_notebook_outputs(report: Dict[str, Any], extracted_text: str) -> str:
     """
