@@ -216,7 +216,7 @@ def build_criterion_prompt(report: dict, criterion: dict, guidance_excerpt: str,
         tuple: (prompt, context, image_paths)
     """
     extraction_model = config.get('model', {}).get('extractor', 'gpt-4o-mini')
-    relevant_content, image_paths = extract_sections_for_criterion_ai(
+    relevant_content, image_paths, _ = extract_sections_for_criterion_ai(
         report, criterion, config, model=extraction_model
     )
 
