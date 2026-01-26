@@ -20,7 +20,7 @@ from image_utils import filter_images_by_token_budget, validate_image_file
 
 API_BASE = "https://models.inference.ai.azure.com"
 
-def strip_callout_boxes(text: str) -> str:
+def strip_callout_boxes(text: str) -> Tuple[str, bool]:
     """
     Remove Quarto callout boxes from text.
 
@@ -30,26 +30,40 @@ def strip_callout_boxes(text: str) -> str:
     :::
 
     These are template instructions that should not be analyzed by the AI.
+
+    Returns:
+        Tuple of (cleaned_text, found_callouts)
+        - cleaned_text: Text with callout boxes removed
+        - found_callouts: True if any callout boxes were found and removed
     """
     # Pattern matches ::: {.callout-*} ... ::: blocks across multiple lines
     pattern = r'::: \{\.callout-[^}]*\}[\s\S]*?^:::'
+    matches = re.findall(pattern, text, flags=re.MULTILINE)
+    found_callouts = len(matches) > 0
+
     cleaned = re.sub(pattern, '', text, flags=re.MULTILINE)
-    return cleaned.strip()
+    return cleaned.strip(), found_callouts
 
 def extract_sections_for_criterion_ai(
     report: Dict[str, Any],
     criterion: Dict[str, Any],
     config: Dict[str, Any],
     model: str = "gpt-4o-mini"
-) -> Tuple[str, List[str]]:
+) -> Tuple[str, List[str], bool]:
     """
     Use AI to extract relevant text, then find associated images and notebook outputs.
+
+    Returns:
+        Tuple of (extracted_text, image_paths, found_callout_boxes)
+        - extracted_text: Text relevant to the criterion
+        - image_paths: List of image file paths
+        - found_callout_boxes: True if template callout boxes were found in the report
     """
     # 1. Extract relevant text sections using an AI model
     full_content = report.get('content', '')
 
     # Strip out callout boxes (template instructions) before analysis
-    full_content = strip_callout_boxes(full_content)
+    full_content, found_callouts = strip_callout_boxes(full_content)
     if len(full_content) < 500:
         extracted_text = full_content
     else:
@@ -63,7 +77,16 @@ def extract_sections_for_criterion_ai(
     # 2. Augment extracted text with notebook outputs
     extracted_text = augment_with_notebook_outputs(report, extracted_text)
 
-    # 3. Extract relevant images based on the extracted text
+    # 3. Add a note if callout boxes were found (student didn't delete template instructions)
+    if found_callouts:
+        callout_note = (
+            "[NOTE FOR FEEDBACK: The student submitted this report with template instruction callout boxes "
+            "still present (Quarto ::: {.callout-*} ... ::: blocks). These should have been deleted before submission. "
+            "Please mention to the student that they should remove all template callout boxes before submitting future reports.]\n\n"
+        )
+        extracted_text = callout_note + extracted_text
+
+    # 4. Extract relevant images based on the extracted text
     image_paths = []
     vision_config = config.get('vision', {})
     criterion_name = criterion.get('name', '')
@@ -77,7 +100,7 @@ def extract_sections_for_criterion_ai(
         else:
             print(f"   Vision disabled for '{criterion_name}'.")
 
-    return extracted_text, image_paths
+    return extracted_text, image_paths, found_callouts
 
 def should_enable_vision_for_criterion(
     report: Dict[str, Any],
@@ -336,7 +359,7 @@ def build_extraction_prompt(report: Dict[str, Any], criterion: Dict[str, Any]) -
     full_content = report.get('content', '')
 
     # Strip out callout boxes (template instructions) before building prompt
-    full_content = strip_callout_boxes(full_content)
+    full_content, _ = strip_callout_boxes(full_content)
 
     # Calculate document size and adapt extraction strategy
     content_word_count = len(full_content.split())
