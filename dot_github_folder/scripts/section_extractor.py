@@ -20,6 +20,22 @@ from image_utils import filter_images_by_token_budget, validate_image_file
 
 API_BASE = "https://models.inference.ai.azure.com"
 
+def strip_callout_boxes(text: str) -> str:
+    """
+    Remove Quarto callout boxes from text.
+
+    Callout boxes in Quarto are formatted as:
+    ::: {.callout-note}
+    ... content ...
+    :::
+
+    These are template instructions that should not be analyzed by the AI.
+    """
+    # Pattern matches ::: {.callout-*} ... ::: blocks across multiple lines
+    pattern = r'::: \{\.callout-[^}]*\}[\s\S]*?^:::'
+    cleaned = re.sub(pattern, '', text, flags=re.MULTILINE)
+    return cleaned.strip()
+
 def extract_sections_for_criterion_ai(
     report: Dict[str, Any],
     criterion: Dict[str, Any],
@@ -31,6 +47,9 @@ def extract_sections_for_criterion_ai(
     """
     # 1. Extract relevant text sections using an AI model
     full_content = report.get('content', '')
+
+    # Strip out callout boxes (template instructions) before analysis
+    full_content = strip_callout_boxes(full_content)
     if len(full_content) < 500:
         extracted_text = full_content
     else:
@@ -315,6 +334,9 @@ def build_extraction_prompt(report: Dict[str, Any], criterion: Dict[str, Any]) -
     structure = report.get('structure', [])
     heading_list = "\n".join([f"{'  '*(h['level']-1)}- {h['text']}" for h in structure[:20]])
     full_content = report.get('content', '')
+
+    # Strip out callout boxes (template instructions) before building prompt
+    full_content = strip_callout_boxes(full_content)
 
     # Calculate document size and adapt extraction strategy
     content_word_count = len(full_content.split())
