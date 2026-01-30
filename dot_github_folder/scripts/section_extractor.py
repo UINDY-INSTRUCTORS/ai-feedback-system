@@ -321,12 +321,19 @@ def extract_relevant_images(
 
     # --- Prioritize and filter the collected images ---
     sorted_paths = sorted(relevant_images.keys(), key=lambda p: relevant_images[p])
-    
-    max_images = vision_config.get('max_images_per_criterion', 3)
+
+    # IMPORTANT: Limit to 2 images max to avoid 413 Payload Too Large errors
+    # 3+ large images can exceed HTTP 4MB limit when base64 encoded
+    max_images = vision_config.get('max_images_per_criterion', 2)
     limited_paths = sorted_paths[:max_images]
 
-    token_budget = vision_config.get('image_token_budget', 2000)
-    resize_dim = vision_config.get('resize_max_dimension')
+    # Token budget for image filtering (not HTTP size, but helps limit quantity)
+    # At 768px resize, most plots use 255-500 tokens, so 1500 allows ~3 medium plots
+    token_budget = vision_config.get('image_token_budget', 1500)
+
+    # Resize dimension to reduce payload size (768px is a good default)
+    # Reduces image file size by ~50% compared to full-res, prevents 413 errors
+    resize_dim = vision_config.get('resize_max_dimension', 768)
     final_paths, tokens_used = filter_images_by_token_budget(
         limited_paths, token_budget, resize_dim
     )

@@ -68,3 +68,44 @@ features:
   code_analysis: true
   figure_checking: true
   citation_checking: true
+
+# === VISION SETTINGS (for analyzing plots and diagrams) ===
+
+vision:
+  # Enable vision analysis for images in reports
+  enabled: true
+
+  # Criteria to use vision for (by criterion_id)
+  # Vision uses tokens but can cause 413 errors if not limited
+  criteria:
+    - "results"
+    - "implementation"
+
+  # Max image dimension to resize to (reduces file size and prevents 413 errors)
+  # Recommended: 512-768 to keep quality while avoiding payload size issues
+  # 768px allows good readability while reducing base64 size by ~50%
+  # Set to null to disable resizing (not recommended - can cause 413 errors)
+  resize_max_dimension: 768
+
+  # Max images per criterion (to avoid 413 Payload Too Large errors)
+  # CRITICAL: Setting this to 3+ caused the previous 413 error
+  # Recommended: 1-2 images per criterion
+  max_images_per_criterion: 2
+
+  # Maximum token budget for images (per criterion)
+  # Used by filter_images_by_token_budget to select which images to include
+  # At 768px resize, most plots use 255-500 tokens
+  # Recommended: 1000-2000 tokens to stay well within HTTP limits
+  image_token_budget: 1500
+
+  # Auto-detect images if criterion has vision enabled
+  auto_detect: true
+
+  # Image priority keywords (higher priority = earlier in list)
+  # Images matching these keywords are selected first
+  image_priority:
+    - "result"
+    - "plot"
+    - "graph"
+    - "diagram"
+    - "schematic"
