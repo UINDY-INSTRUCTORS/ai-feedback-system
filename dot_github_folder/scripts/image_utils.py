@@ -9,7 +9,7 @@ import io
 import os
 import mimetypes
 from pathlib import Path
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple, List, Dict
 
 # Try to import PIL, but gracefully degrade if not available
 try:
@@ -18,6 +18,13 @@ try:
 except ImportError:
     HAS_PIL = False
     print("WARNING: PIL/Pillow not installed. Image resizing disabled.")
+
+# Constants for payload optimization
+MAX_PAYLOAD_MB = 2.5  # Conservative limit for 4MB API limit
+MIN_RESOLUTION = 256  # Below this, images become illegible
+MIN_QUALITY = 65  # Below this, compression artifacts become noticeable
+BASE64_OVERHEAD = 1.33  # 33% size increase from base64 encoding
+JSON_OVERHEAD_BYTES = 10_000  # ~10KB for JSON structure
 
 
 def encode_image_simple(image_path: str) -> Optional[str]:
@@ -247,6 +254,236 @@ def filter_images_by_token_budget(
             break
 
     return selected, total_tokens
+
+
+def encode_image_to_jpeg(img: Image, quality: int = 85) -> bytes:
+    """
+    Convert any image format to JPEG bytes, handling edge cases.
+
+    Args:
+        img: PIL Image object
+        quality: JPEG quality (1-100)
+
+    Returns:
+        JPEG bytes, or None if conversion fails
+    """
+    try:
+        # Handle RGBA → RGB
+        if img.mode == 'RGBA':
+            rgb_img = Image.new('RGB', img.size, (255, 255, 255))
+            rgb_img.paste(img, mask=img.split()[3])
+            img = rgb_img
+        # Handle CMYK → RGB
+        elif img.mode == 'CMYK':
+            img = img.convert('RGB')
+        # Handle grayscale → RGB (for consistency)
+        elif img.mode == 'L':
+            img = img.convert('RGB')
+        # Handle other modes
+        elif img.mode not in ('RGB', '1'):
+            img = img.convert('RGB')
+
+        # Encode to JPEG
+        buffer = io.BytesIO()
+        img.save(buffer, format='JPEG', quality=quality, optimize=True)
+        return buffer.getvalue()
+
+    except Exception as e:
+        print(f"WARNING: Failed to convert image to JPEG: {e}")
+        return None
+
+
+def estimate_jpeg_size(image_path: str, max_dimension: Optional[int] = None, quality: int = 85) -> int:
+    """
+    Estimate JPEG file size by actually encoding the image.
+
+    Args:
+        image_path: Path to the image file
+        max_dimension: Optional max width/height (preserves aspect ratio)
+        quality: JPEG quality (1-100)
+
+    Returns:
+        Estimated size in bytes (including base64 overhead)
+    """
+    try:
+        if not Path(image_path).exists():
+            return 0
+
+        if not HAS_PIL:
+            # Without PIL, return conservative estimate
+            file_size = os.path.getsize(image_path)
+            return int(file_size * BASE64_OVERHEAD)
+
+        with Image.open(image_path) as img:
+            # Resize if needed
+            if max_dimension and (img.width > max_dimension or img.height > max_dimension):
+                if img.width > img.height:
+                    new_width = max_dimension
+                    new_height = int(img.height * (max_dimension / img.width))
+                else:
+                    new_height = max_dimension
+                    new_width = int(img.width * (max_dimension / img.height))
+                img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+
+            # Convert to JPEG and measure
+            jpeg_bytes = encode_image_to_jpeg(img, quality)
+            if jpeg_bytes:
+                # Add base64 overhead (33%)
+                return int(len(jpeg_bytes) * BASE64_OVERHEAD)
+            else:
+                return int(os.path.getsize(image_path) * BASE64_OVERHEAD)
+
+    except Exception as e:
+        print(f"WARNING: Could not estimate size for {image_path}: {e}")
+        # Conservative estimate
+        try:
+            return int(os.path.getsize(image_path) * BASE64_OVERHEAD)
+        except:
+            return 100_000  # 100KB fallback
+
+
+def estimate_total_payload_size(text_size_bytes: int, image_base64_list: List[str]) -> int:
+    """
+    Calculate total HTTP payload size.
+
+    Args:
+        text_size_bytes: Size of text content (including prompt)
+        image_base64_list: List of base64-encoded image data URIs
+
+    Returns:
+        Total payload size in bytes
+    """
+    image_size = sum(len(img) for img in image_base64_list)
+    return text_size_bytes + image_size + JSON_OVERHEAD_BYTES
+
+
+def optimize_images_for_payload(
+    image_paths: List[str],
+    text_size_bytes: int,
+    config: Optional[dict] = None,
+    max_payload_mb: float = MAX_PAYLOAD_MB
+) -> List[Dict[str, any]]:
+    """
+    Adaptively optimize images to fit within payload limit.
+
+    Applies fallback sequence: Quality → Resolution → Image count
+    Priority: Keep all images by reducing quality/resolution first,
+    only drop images as last resort.
+
+    Args:
+        image_paths: List of image paths
+        text_size_bytes: Size of text content in bytes
+        config: Optional config dict with vision settings
+        max_payload_mb: Maximum payload size in MB
+
+    Returns:
+        List of dicts with optimized image data:
+        [
+            {
+                'path': str,
+                'base64_data': str (data:image/jpeg;base64,...),
+                'size_bytes': int,
+                'resolution': int,
+                'quality': int
+            }
+        ]
+    """
+    if not HAS_PIL or not image_paths:
+        return []
+
+    # Get configuration settings
+    config = config or {}
+    vision_config = config.get('vision', {})
+    initial_resolution = vision_config.get('resize_max_dimension', 768)
+    initial_quality = 85  # Default quality
+
+    max_payload_bytes = max_payload_mb * 1024 * 1024
+    available_bytes = max_payload_bytes - text_size_bytes - JSON_OVERHEAD_BYTES
+
+    # Try different optimization levels
+    optimization_steps = [
+        {'quality': 85, 'resolution': initial_resolution, 'drop_count': 0, 'description': 'Initial'},
+        {'quality': 75, 'resolution': initial_resolution, 'drop_count': 0, 'description': 'Quality→75'},
+        {'quality': 65, 'resolution': initial_resolution, 'drop_count': 0, 'description': 'Quality→65'},
+        {'quality': 65, 'resolution': 512, 'drop_count': 0, 'description': 'Resolution→512'},
+        {'quality': 65, 'resolution': 384, 'drop_count': 0, 'description': 'Resolution→384'},
+    ]
+
+    # Try each optimization step, then drop images one by one
+    for drop_count in range(len(image_paths)):
+        images_to_try = image_paths[:len(image_paths) - drop_count]
+
+        for step in optimization_steps:
+            if step['drop_count'] != drop_count:
+                step['drop_count'] = drop_count
+
+            # Try to fit images with this configuration
+            optimized_images = []
+            total_size = 0
+
+            for img_path in images_to_try:
+                try:
+                    with Image.open(img_path) as img:
+                        # Resize if needed
+                        resolution = step['resolution']
+                        if img.width > resolution or img.height > resolution:
+                            if img.width > img.height:
+                                new_width = resolution
+                                new_height = int(img.height * (resolution / img.width))
+                            else:
+                                new_height = resolution
+                                new_width = int(img.width * (resolution / img.height))
+                            img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+                        else:
+                            new_width, new_height = img.width, img.height
+
+                        # Convert to JPEG
+                        jpeg_bytes = encode_image_to_jpeg(img, step['quality'])
+                        if not jpeg_bytes:
+                            continue
+
+                        # Encode to base64
+                        base64_str = base64.b64encode(jpeg_bytes).decode('utf-8')
+                        base64_data = f"data:image/jpeg;base64,{base64_str}"
+
+                        size_with_overhead = len(base64_data)
+
+                        # Check if adding this image stays under budget
+                        if total_size + size_with_overhead <= available_bytes:
+                            optimized_images.append({
+                                'path': img_path,
+                                'base64_data': base64_data,
+                                'size_bytes': size_with_overhead,
+                                'resolution': resolution,
+                                'quality': step['quality']
+                            })
+                            total_size += size_with_overhead
+                        # If we can't add this image with current params, stop trying for this config
+                        elif optimized_images:
+                            break
+
+                except Exception as e:
+                    print(f"   WARNING: Could not process {Path(img_path).name}: {e}")
+                    continue
+
+            # Check if this configuration fits all requested images
+            if len(optimized_images) == len(images_to_try):
+                # Success! All images fit with this configuration
+                total_payload = text_size_bytes + total_size + JSON_OVERHEAD_BYTES
+                final_mb = total_payload / (1024 * 1024)
+
+                if drop_count > 0:
+                    print(f"   ⚠️  Optimized: {step['description']}, {len(optimized_images)} images: {final_mb:.2f}MB")
+                elif step['quality'] < 85 or step['resolution'] < initial_resolution:
+                    print(f"   ⚠️  Optimized: {step['description']}: {final_mb:.2f}MB")
+                else:
+                    print(f"   ✅ Payload: {final_mb:.2f}MB ({len(optimized_images)} images)")
+
+                return optimized_images
+
+    # If we get here, nothing fit - return empty list (will gracefully degrade)
+    print(f"   ❌ Cannot optimize images to fit {max_payload_mb}MB limit")
+    return []
 
 
 def validate_image_file(image_path: str, supported_formats: List[str] = None) -> bool:

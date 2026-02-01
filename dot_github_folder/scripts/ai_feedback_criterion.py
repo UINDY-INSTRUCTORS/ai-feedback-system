@@ -16,7 +16,7 @@ from typing import Dict, Any, Tuple, List, Optional
 # Add parent dir to path to allow local imports
 sys.path.append(str(Path(__file__).parent))
 from section_extractor import extract_sections_for_criterion_ai
-from image_utils import encode_image_to_base64
+from image_utils import encode_image_to_base64, optimize_images_for_payload
 
 # Load environment variables from .env file if it exists (for local testing)
 try:
@@ -313,6 +313,7 @@ def call_github_models_api(
     """
     Call GitHub Models API, handling both text and vision requests.
     Implements exponential backoff retry on 429 rate limit errors.
+    Optimizes images to fit within payload limits.
 
     Returns:
         tuple: (feedback_text, response_data, request_payload)
@@ -324,23 +325,45 @@ def call_github_models_api(
     endpoint = f"{API_BASE}/chat/completions"
     headers = {"Content-Type": "application/json", "Authorization": f"Bearer {token}"}
 
-    # --- Build message payload ---
+    # --- Build message payload (text only first) ---
     messages = [
         {"role": "system", "content": "You are an expert instructor providing constructive, specific feedback on student technical reports in JSON format."},
     ]
     user_content = [{"type": "text", "text": prompt}]
-
-    if image_paths:
-        print(f"   Encoding {len(image_paths)} image(s) for vision model...")
-        resize_dim = config.get('vision', {}).get('resize_max_dimension')
-        for img_path in image_paths:
-            base64_data = encode_image_to_base64(img_path, max_dimension=resize_dim)
-            if base64_data:
-                user_content.append({"type": "image_url", "image_url": {"url": base64_data}})
-            else:
-                print(f"   WARNING: Could not encode image {img_path}, skipping.")
-
     messages.append({"role": "user", "content": user_content})
+
+    # Calculate text payload size
+    text_payload = {
+        "model": model,
+        "messages": messages,
+        "response_format": {"type": "json_object"},
+        "temperature": 0.3,
+        "max_tokens": config.get('max_output_tokens', 2000)
+    }
+    text_payload_json = json.dumps(text_payload)
+    text_size_bytes = len(text_payload_json.encode('utf-8'))
+
+    # Optimize images for payload size
+    optimized_images = []
+    if image_paths:
+        print(f"   Processing {len(image_paths)} image(s) for vision model...")
+        optimized_images = optimize_images_for_payload(
+            image_paths=image_paths,
+            text_size_bytes=text_size_bytes,
+            config=config
+        )
+
+        if optimized_images:
+            # Add optimized images to user content
+            user_content = [{"type": "text", "text": prompt}]
+            for img_data in optimized_images:
+                user_content.append({
+                    "type": "image_url",
+                    "image_url": {"url": img_data['base64_data']}
+                })
+            messages[-1]["content"] = user_content
+        elif image_paths:
+            print(f"   ⚠️  Could not fit images in payload, proceeding with text only")
     # --- End message payload ---
 
     payload = {
@@ -401,8 +424,23 @@ def call_github_models_api(
                 else:
                     print(f"   ❌ Rate limited after {max_retries} attempts. Giving up.")
                     raise
+            elif e.response.status_code == 413:
+                # Payload too large - try with no images as final fallback
+                if attempt < max_retries - 1 and optimized_images:
+                    print(f"   ⚠️  Payload too large (413). Retrying without images...")
+                    # Rebuild payload without images
+                    messages_no_images = [
+                        {"role": "system", "content": "You are an expert instructor providing constructive, specific feedback on student technical reports in JSON format."},
+                        {"role": "user", "content": [{"type": "text", "text": prompt}]}
+                    ]
+                    payload["messages"] = messages_no_images
+                    optimized_images = []
+                    continue
+                else:
+                    print(f"   ❌ Payload too large (413). Cannot proceed.")
+                    raise
             else:
-                # Not a rate limit error - raise immediately
+                # Not a rate limit or payload error - raise immediately
                 raise
 
     # Should not reach here, but just in case
@@ -431,6 +469,7 @@ def analyze_criterion(report: dict, criterion: dict, guidance: str, config: dict
         guidance_excerpt = get_criterion_guidance(guidance, criterion)
         prompt, context, image_paths = build_criterion_prompt(report, criterion, guidance_excerpt, config)
         metadata["image_paths"] = image_paths
+        metadata["requested_images"] = len(image_paths)
 
         start_time = datetime.now().timestamp()
         feedback_json, response_data, request_payload = call_github_models_api(
@@ -444,13 +483,20 @@ def analyze_criterion(report: dict, criterion: dict, guidance: str, config: dict
             'completion_tokens': usage.get('completion_tokens', 0),
             'total_tokens': usage.get('total_tokens', 0)
         }
-        
+
+        # Count images actually sent (for optimization tracking)
+        images_in_request = 0
+        for content_item in request_payload.get('messages', [])[-1].get('content', []):
+            if isinstance(content_item, dict) and content_item.get('type') == 'image_url':
+                images_in_request += 1
+
         metadata.update({
             "api_endpoint": f"{API_BASE}/chat/completions",
             "request_time_seconds": round(end_time - start_time, 2),
             "tokens": tokens,
             "success": True,
             "context_word_count": len(context.split()),
+            "images_included": images_in_request,
         })
 
         # The actual feedback content is inside the JSON now
