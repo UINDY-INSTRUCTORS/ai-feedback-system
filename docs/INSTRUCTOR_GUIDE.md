@@ -84,14 +84,50 @@ uv run python .github/scripts/ai_feedback_criterion.py
 cat feedback.md
 ```
 
-### 5. Deploy to Students
+### 5. Share the Feedback Script with Students
 
-When students push to GitHub, they can request feedback with:
+**Recommended**: Instead of having students manually tag their repo, include the automated feedback script in your assignment template:
 
 ```bash
-git tag feedback-v1
-git push origin feedback-v1
+# Copy the feedback script to your assignment template
+cp ai-feedback-system/get-feedback.sh your-assignment-template/
+
+# Make sure it's executable
+chmod +x get-feedback.sh
 ```
+
+**Students then use it simply:**
+```bash
+# Commit and push their work
+git add .
+git commit -m "Completed assignment"
+git push
+
+# Request feedback
+./get-feedback.sh
+```
+
+**Why this is better:**
+- ✅ Prevents the "workflow runs on old commit" problem
+- ✅ Automatically checks that changes are pushed
+- ✅ Students don't need to know git tag commands
+- ✅ Automatic version tagging (v0.0.1, v0.0.2, etc.)
+- ✅ Clear error messages if something is wrong
+- ✅ See [FEEDBACK.md](FEEDBACK.md) for complete documentation
+
+### 6. Deploy to Students (Workflow)
+
+The system will automatically run when students:
+
+```bash
+./get-feedback.sh  # Creates a tag and pushes it
+```
+
+The AI will:
+1. ✅ Analyze their report against your rubric
+2. ✅ Provide detailed criterion-by-criterion feedback
+3. ✅ Post results as a GitHub Issue
+4. ✅ Notify the student
 
 The system automatically analyzes their report and posts feedback as a GitHub Issue!
 

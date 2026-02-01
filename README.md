@@ -157,18 +157,25 @@ Write your report in `index.qmd` (or whatever file your instructor specified):
 
 ### 2. Request Feedback
 
-When ready for feedback:
+When ready for feedback, use the feedback script:
 
 ```bash
-# Make sure your latest work is committed
+# Make sure your latest work is committed and pushed
 git add .
 git commit -m "Complete assignment"
 git push
 
-# Create a feedback tag
-git tag feedback-v1
-git push origin feedback-v1
+# Run the feedback script
+./get-feedback.sh
 ```
+
+The script will:
+- ✅ Verify all your changes are committed
+- ✅ Verify all commits are pushed to GitHub
+- 📝 Create a new version tag automatically
+- 🚀 Request feedback from the AI system
+
+**That's it!** No need to manually create tags or understand git versioning.
 
 ### 3. Wait for Feedback (1-3 minutes)
 
@@ -189,13 +196,22 @@ Use this feedback to improve your work before the final deadline!
 
 ### Can I Get Feedback Multiple Times?
 
-Yes! Just create a new tag:
+Yes! Just run the script again:
 ```bash
-git tag feedback-v2
-git push origin feedback-v2
+# Make your improvements
+git add .
+git commit -m "Addressed feedback"
+git push
+
+# Request updated feedback
+./get-feedback.sh
 ```
 
 Each feedback request creates a separate issue so you can track your progress.
+
+### Troubleshooting
+
+If the script gives you an error, see [FEEDBACK.md](FEEDBACK.md) for detailed troubleshooting steps and explanations.
 
 ---
 
