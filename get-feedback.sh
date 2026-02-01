@@ -58,23 +58,23 @@ fi
 
 echo "✅ All commits pushed to GitHub"
 
-# Get the latest tag or default to v0.0.0
-LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+# Get the latest tag or default to feedback-v0.0.0
+LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "feedback-v0.0.0")
 echo "📌 Latest tag: $LATEST_TAG"
 
 # Parse version and increment patch version
-if [[ $LATEST_TAG =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+if [[ $LATEST_TAG =~ ^feedback-v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
     MAJOR=${BASH_REMATCH[1]}
     MINOR=${BASH_REMATCH[2]}
     PATCH=${BASH_REMATCH[3]}
 else
-    echo "❌ Error: Tag format is invalid. Expected vX.Y.Z format"
+    echo "❌ Error: Tag format is invalid. Expected feedback-vX.Y.Z format"
     exit 1
 fi
 
 # Increment patch version
 PATCH=$((PATCH + 1))
-NEW_TAG="v${MAJOR}.${MINOR}.${PATCH}"
+NEW_TAG="feedback-v${MAJOR}.${MINOR}.${PATCH}"
 
 echo "📝 Creating new tag: $NEW_TAG"
 
