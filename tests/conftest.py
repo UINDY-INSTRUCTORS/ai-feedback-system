@@ -43,62 +43,71 @@ def sample_config() -> Dict[str, Any]:
 def sample_rubric() -> Dict[str, Any]:
     """Sample rubric in YAML format."""
     return {
-        'course': 'PH280',
-        'project': 'p01-euler-method',
+        'assignment': {
+            'course': 'PH280',
+            'name': 'p01-euler-method',
+            'total_points': 100
+        },
         'criteria': [
             {
                 'id': 'theory',
                 'name': 'Theory & Explanation',
                 'weight': 20,
-                'levels': [
-                    {
-                        'level': 'Exemplary',
-                        'percentage': '18-20%',
-                        'description': 'Clear and thorough explanation'
+                'description': 'Clear explanation of the underlying theory',
+                'levels': {
+                    'exemplary': {
+                        'description': 'Clear and thorough explanation',
+                        'point_range': [18, 20],
+                        'indicators': ['Explains all key concepts', 'Examples provided']
                     },
-                    {
-                        'level': 'Satisfactory',
-                        'percentage': '12-17%',
-                        'description': 'Adequate explanation with minor gaps'
+                    'satisfactory': {
+                        'description': 'Adequate explanation with minor gaps',
+                        'point_range': [12, 17],
+                        'indicators': ['Most concepts explained', 'Some examples']
                     },
-                    {
-                        'level': 'Developing',
-                        'percentage': '6-11%',
-                        'description': 'Basic explanation, significant gaps'
+                    'developing': {
+                        'description': 'Basic explanation, significant gaps',
+                        'point_range': [6, 11],
+                        'indicators': ['Basic concepts covered', 'Limited detail']
                     },
-                    {
-                        'level': 'Unsatisfactory',
-                        'percentage': '0-5%',
-                        'description': 'Missing or unclear'
+                    'unsatisfactory': {
+                        'description': 'Missing or unclear',
+                        'point_range': [0, 5],
+                        'indicators': ['Concepts not explained', 'No detail']
                     }
-                ]
+                },
+                'keywords': ['theory', 'explanation', 'concepts'],
+                'common_issues': ['Vague explanations', 'Missing key concepts']
             },
             {
                 'id': 'implementation',
                 'name': 'Implementation/Code',
                 'weight': 40,
-                'levels': [
-                    {
-                        'level': 'Exemplary',
-                        'percentage': '36-40%',
-                        'description': 'Correct, well-documented code'
+                'description': 'Code quality, correctness, and documentation',
+                'levels': {
+                    'exemplary': {
+                        'description': 'Correct, well-documented code',
+                        'point_range': [36, 40],
+                        'indicators': ['Code runs correctly', 'Well documented', 'Proper structure']
                     },
-                    {
-                        'level': 'Satisfactory',
-                        'percentage': '24-35%',
-                        'description': 'Mostly correct, some documentation'
+                    'satisfactory': {
+                        'description': 'Mostly correct, some documentation',
+                        'point_range': [24, 35],
+                        'indicators': ['Code mostly works', 'Some documentation', 'Reasonable structure']
                     },
-                    {
-                        'level': 'Developing',
-                        'percentage': '12-23%',
-                        'description': 'Partially correct, minimal documentation'
+                    'developing': {
+                        'description': 'Partially correct, minimal documentation',
+                        'point_range': [12, 23],
+                        'indicators': ['Code has issues', 'Little documentation', 'Poor structure']
                     },
-                    {
-                        'level': 'Unsatisfactory',
-                        'percentage': '0-11%',
-                        'description': 'Incorrect or missing'
+                    'unsatisfactory': {
+                        'description': 'Incorrect or missing',
+                        'point_range': [0, 11],
+                        'indicators': ['Code does not work', 'No documentation', 'No structure']
                     }
-                ]
+                },
+                'keywords': ['code', 'implementation', 'correctness'],
+                'common_issues': ['Undocumented code', 'Incorrect logic', 'Poor style']
             }
         ]
     }

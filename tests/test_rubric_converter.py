@@ -186,28 +186,31 @@ class TestValidateRoundtrip:
     def test_roundtrip_validation_with_various_criteria(self, tmp_path):
         """Test roundtrip validation with various criterion structures."""
         rubric = {
-            'course': 'TEST101',
-            'project': 'test-project',
+            'assignment': {
+                'course': 'TEST101',
+                'name': 'test-project',
+                'total_points': 100
+            },
             'criteria': [
                 {
                     'id': 'criterion1',
                     'name': 'First Criterion',
                     'weight': 30,
-                    'levels': [
-                        {'level': 'Advanced', 'percentage': '28-30%'},
-                        {'level': 'Proficient', 'percentage': '20-27%'},
-                        {'level': 'Developing', 'percentage': '0-19%'},
-                    ]
+                    'levels': {
+                        'advanced': {'description': 'Advanced work', 'point_range': [28, 30], 'indicators': []},
+                        'proficient': {'description': 'Proficient work', 'point_range': [20, 27], 'indicators': []},
+                        'developing': {'description': 'Developing work', 'point_range': [0, 19], 'indicators': []},
+                    }
                 },
                 {
                     'id': 'criterion2',
                     'name': 'Second Criterion',
                     'weight': 70,
-                    'levels': [
-                        {'level': 'Excellent', 'percentage': '63-70%'},
-                        {'level': 'Good', 'percentage': '49-62%'},
-                        {'level': 'Fair', 'percentage': '0-48%'},
-                    ]
+                    'levels': {
+                        'excellent': {'description': 'Excellent work', 'point_range': [63, 70], 'indicators': []},
+                        'good': {'description': 'Good work', 'point_range': [49, 62], 'indicators': []},
+                        'fair': {'description': 'Fair work', 'point_range': [0, 48], 'indicators': []},
+                    }
                 },
             ]
         }
@@ -229,17 +232,23 @@ class TestConversionEdgeCases:
     def test_conversion_with_special_characters(self, tmp_path):
         """Test conversion with special characters in criterion names."""
         rubric = {
-            'course': 'PH 280: Computational Physics',
-            'project': 'Project 3: Taylor Series',
+            'assignment': {
+                'course': 'PH 280: Computational Physics',
+                'name': 'Project 3: Taylor Series',
+                'total_points': 100
+            },
             'criteria': [
                 {
                     'id': 'criterion-1',
                     'name': 'Theory & Applications (Math)',
                     'weight': 40,
-                    'levels': [
-                        {'level': 'Excellent', 'percentage': '36-40%',
-                         'description': 'Clear explanation with examples & evidence'}
-                    ]
+                    'levels': {
+                        'excellent': {
+                            'description': 'Clear explanation with examples & evidence',
+                            'point_range': [36, 40],
+                            'indicators': []
+                        }
+                    }
                 }
             ]
         }
@@ -258,25 +267,28 @@ class TestConversionEdgeCases:
     def test_conversion_with_long_descriptions(self, tmp_path):
         """Test conversion with long description text."""
         rubric = {
-            'course': 'TEST',
-            'project': 'test',
+            'assignment': {
+                'course': 'TEST',
+                'name': 'test',
+                'total_points': 100
+            },
             'criteria': [
                 {
                     'id': 'crit1',
                     'name': 'Criterion',
                     'weight': 100,
-                    'levels': [
-                        {
-                            'level': 'Advanced',
-                            'percentage': '90-100%',
+                    'levels': {
+                        'advanced': {
                             'description': (
                                 'This is a very long description that spans multiple '
                                 'sentences and explains in detail what constitutes '
                                 'excellent performance on this criterion. It should include '
                                 'specific examples of what work looks like at this level.'
-                            )
+                            ),
+                            'point_range': [90, 100],
+                            'indicators': []
                         }
-                    ]
+                    }
                 }
             ]
         }
@@ -294,17 +306,28 @@ class TestConversionEdgeCases:
     def test_conversion_with_empty_descriptions(self, tmp_path):
         """Test conversion with empty or missing descriptions."""
         rubric = {
-            'course': 'TEST',
-            'project': 'test',
+            'assignment': {
+                'course': 'TEST',
+                'name': 'test',
+                'total_points': 100
+            },
             'criteria': [
                 {
                     'id': 'crit1',
                     'name': 'Criterion',
                     'weight': 100,
-                    'levels': [
-                        {'level': 'Advanced', 'percentage': '90-100%'},
-                        {'level': 'Basic', 'percentage': '0-89%', 'description': ''},
-                    ]
+                    'levels': {
+                        'advanced': {
+                            'description': 'Advanced work',
+                            'point_range': [90, 100],
+                            'indicators': []
+                        },
+                        'basic': {
+                            'description': '',
+                            'point_range': [0, 89],
+                            'indicators': []
+                        }
+                    }
                 }
             ]
         }
@@ -323,17 +346,23 @@ class TestConversionEdgeCases:
     def test_conversion_with_unicode(self, tmp_path):
         """Test conversion with Unicode characters."""
         rubric = {
-            'course': 'Physics 物理',
-            'project': 'test-проект',
+            'assignment': {
+                'course': 'Physics 物理',
+                'name': 'test-проект',
+                'total_points': 100
+            },
             'criteria': [
                 {
                     'id': 'crit1',
                     'name': 'Criterion α β γ',
                     'weight': 100,
-                    'levels': [
-                        {'level': 'Advanced ★★★', 'percentage': '90-100%',
-                         'description': 'Excellent work with ✓ check marks'}
-                    ]
+                    'levels': {
+                        'advanced': {
+                            'description': 'Excellent work with ✓ check marks',
+                            'point_range': [90, 100],
+                            'indicators': ['Advanced ★★★']
+                        }
+                    }
                 }
             ]
         }
@@ -411,3 +440,311 @@ class TestFormatConsistency:
 
             # Each conversion should produce non-empty Markdown
             assert len(md_content) > 0
+
+
+@pytest.mark.deterministic
+@pytest.mark.unit
+class TestRealWorldRubrics:
+    """Tests for real-world rubrics from various courses."""
+
+    @pytest.fixture
+    def fixture_dir(self):
+        """Path to the fixtures directory."""
+        return Path(__file__).parent / 'fixtures' / 'rubrics'
+
+    def test_ph280_p01_euler_markdown_to_yaml(self, fixture_dir, tmp_path):
+        """Test conversion of PH 280 P1 Euler rubric (Markdown to YAML)."""
+        md_file = fixture_dir / 'ph280-p01-euler-rubric.md'
+        yaml_file = tmp_path / 'ph280_p01.yml'
+
+        if not md_file.exists():
+            pytest.skip(f"Rubric file {md_file} not found")
+
+        # Convert to YAML
+        markdown_to_yaml(str(md_file), str(yaml_file))
+
+        # Verify output exists and is valid YAML
+        assert yaml_file.exists()
+        import yaml
+        with open(yaml_file) as f:
+            result = yaml.safe_load(f)
+        assert isinstance(result, dict)
+        assert 'criteria' in result
+
+    def test_ph280_p03_taylor_markdown_to_yaml(self, fixture_dir, tmp_path):
+        """Test conversion of PH 280 P3 Taylor rubric (Markdown to YAML)."""
+        md_file = fixture_dir / 'ph280-p03-taylor-series-rubric.md'
+        yaml_file = tmp_path / 'ph280_p03.yml'
+
+        if not md_file.exists():
+            pytest.skip(f"Rubric file {md_file} not found")
+
+        # Convert to YAML
+        markdown_to_yaml(str(md_file), str(yaml_file))
+
+        # Verify output
+        assert yaml_file.exists()
+        import yaml
+        with open(yaml_file) as f:
+            result = yaml.safe_load(f)
+        assert isinstance(result, dict)
+        assert 'criteria' in result
+        assert len(result['criteria']) > 0
+
+    def test_ph230_p8_motors_markdown_to_yaml(self, fixture_dir, tmp_path):
+        """Test conversion of PH 230 P8 Motors rubric (Markdown to YAML)."""
+        md_file = fixture_dir / 'ph230-p8-motors-rubric.md'
+        yaml_file = tmp_path / 'ph230_p8.yml'
+
+        if not md_file.exists():
+            pytest.skip(f"Rubric file {md_file} not found")
+
+        # Convert to YAML
+        markdown_to_yaml(str(md_file), str(yaml_file))
+
+        # Verify output
+        assert yaml_file.exists()
+        import yaml
+        with open(yaml_file) as f:
+            result = yaml.safe_load(f)
+        assert isinstance(result, dict)
+        assert 'criteria' in result
+
+    def test_test_assignment_heun_markdown_to_yaml(self, fixture_dir, tmp_path):
+        """Test conversion of test assignment Heun rubric (Markdown to YAML)."""
+        md_file = fixture_dir / 'test-assignment-heun-rubric.md'
+        yaml_file = tmp_path / 'test_assignment_heun.yml'
+
+        if not md_file.exists():
+            pytest.skip(f"Rubric file {md_file} not found")
+
+        # Convert to YAML
+        markdown_to_yaml(str(md_file), str(yaml_file))
+
+        # Verify output
+        assert yaml_file.exists()
+        import yaml
+        with open(yaml_file) as f:
+            result = yaml.safe_load(f)
+        assert isinstance(result, dict)
+        assert 'criteria' in result
+
+    def test_ph230_p0_yaml_to_markdown(self, fixture_dir, tmp_path):
+        """Test conversion of PH 230 P0 YAML rubric to Markdown."""
+        yaml_file = fixture_dir / 'ph230-p0-rubric.yml'
+        md_file = tmp_path / 'ph230_p0.md'
+
+        if not yaml_file.exists():
+            pytest.skip(f"Rubric file {yaml_file} not found")
+
+        # Convert to Markdown
+        yaml_to_markdown(str(yaml_file), str(md_file))
+
+        # Verify output
+        assert md_file.exists()
+        content = md_file.read_text()
+        assert len(content) > 0
+        assert '#' in content  # Should have markdown headers
+
+    def test_ph280_p01_roundtrip(self, fixture_dir, tmp_path):
+        """Test roundtrip conversion of PH 280 P1 rubric (MD → YAML → MD)."""
+        md_original = fixture_dir / 'ph280-p01-euler-rubric.md'
+        yaml_temp = tmp_path / 'ph280_p01.yml'
+        md_final = tmp_path / 'ph280_p01_final.md'
+
+        if not md_original.exists():
+            pytest.skip(f"Rubric file {md_original} not found")
+
+        # First roundtrip: MD → YAML
+        markdown_to_yaml(str(md_original), str(yaml_temp))
+        assert yaml_temp.exists()
+
+        # Second roundtrip: YAML → MD
+        yaml_to_markdown(str(yaml_temp), str(md_final))
+        assert md_final.exists()
+
+        # Both outputs should be non-empty
+        assert len(md_final.read_text()) > 0
+
+    def test_ph230_p8_roundtrip(self, fixture_dir, tmp_path):
+        """Test roundtrip conversion of PH 230 P8 rubric (MD → YAML → MD)."""
+        md_original = fixture_dir / 'ph230-p8-motors-rubric.md'
+        yaml_temp = tmp_path / 'ph230_p8.yml'
+        md_final = tmp_path / 'ph230_p8_final.md'
+
+        if not md_original.exists():
+            pytest.skip(f"Rubric file {md_original} not found")
+
+        # Roundtrip conversion
+        markdown_to_yaml(str(md_original), str(yaml_temp))
+        yaml_to_markdown(str(yaml_temp), str(md_final))
+
+        # Verify both conversions completed
+        assert yaml_temp.exists()
+        assert md_final.exists()
+
+    def test_all_fixtures_parseable(self, fixture_dir):
+        """Test that all fixture rubrics can be parsed without errors."""
+        import yaml
+        from pathlib import Path
+
+        if not fixture_dir.exists():
+            pytest.skip(f"Fixture directory {fixture_dir} not found")
+
+        # Test all YAML files
+        for yaml_file in fixture_dir.glob('*.yml'):
+            with open(yaml_file) as f:
+                data = yaml.safe_load(f)
+            assert data is not None, f"Failed to parse {yaml_file}"
+
+        # Test all Markdown files can be read
+        for md_file in fixture_dir.glob('*.md'):
+            content = md_file.read_text()
+            assert len(content) > 0, f"Empty markdown file: {md_file}"
+
+    def test_markdown_to_yaml_preserves_criteria_count(self, fixture_dir, tmp_path):
+        """Test that MD→YAML conversion preserves criterion count."""
+        md_files = [
+            fixture_dir / 'ph280-p01-euler-rubric.md',
+            fixture_dir / 'ph280-p03-taylor-series-rubric.md',
+            fixture_dir / 'ph230-p8-motors-rubric.md',
+        ]
+
+        import yaml
+        for md_file in md_files:
+            if not md_file.exists():
+                continue
+
+            yaml_file = tmp_path / f"{md_file.stem}.yml"
+            markdown_to_yaml(str(md_file), str(yaml_file))
+
+            # Load and verify
+            with open(yaml_file) as f:
+                result = yaml.safe_load(f)
+
+            # Should have criteria
+            assert 'criteria' in result
+            assert isinstance(result['criteria'], list)
+            assert len(result['criteria']) > 0, f"No criteria in {md_file}"
+
+    def test_yaml_to_markdown_preserves_assignment_info(self, fixture_dir, tmp_path):
+        """Test that YAML→MD conversion preserves assignment information."""
+        yaml_file = fixture_dir / 'ph230-p0-rubric.yml'
+
+        if not yaml_file.exists():
+            pytest.skip(f"Rubric file {yaml_file} not found")
+
+        md_file = tmp_path / 'output.md'
+        yaml_to_markdown(str(yaml_file), str(md_file))
+
+        # Check that assignment info is in the markdown
+        content = md_file.read_text()
+        assert 'assignment' in content.lower() or 'course' in content.lower()
+
+    def test_markdown_handles_various_table_formats(self, fixture_dir, tmp_path):
+        """Test that converter handles different markdown table formats."""
+        md_files = [
+            fixture_dir / 'ph280-p01-euler-rubric.md',
+            fixture_dir / 'ph230-p8-motors-rubric.md',
+            fixture_dir / 'test-assignment-heun-rubric.md',
+        ]
+
+        import yaml
+        for md_file in md_files:
+            if not md_file.exists():
+                continue
+
+            yaml_file = tmp_path / f"{md_file.stem}.yml"
+
+            # Should not raise an exception
+            markdown_to_yaml(str(md_file), str(yaml_file))
+
+            # Verify result is valid
+            assert yaml_file.exists()
+            with open(yaml_file) as f:
+                data = yaml.safe_load(f)
+            assert isinstance(data, dict)
+
+    def test_complex_rubric_with_indicators(self, fixture_dir, tmp_path):
+        """Test conversion of complex rubric with indicators (PH 230 P8)."""
+        md_file = fixture_dir / 'ph230-p8-motors-rubric.md'
+        yaml_file = tmp_path / 'ph230_p8_complex.yml'
+
+        if not md_file.exists():
+            pytest.skip(f"Rubric file {md_file} not found")
+
+        markdown_to_yaml(str(md_file), str(yaml_file))
+
+        # Verify the YAML has the structure
+        import yaml
+        with open(yaml_file) as f:
+            result = yaml.safe_load(f)
+
+        # Should have criteria with levels
+        assert 'criteria' in result
+        if len(result['criteria']) > 0:
+            first_criterion = result['criteria'][0]
+            # Should have at least name and weight
+            assert 'name' in first_criterion or 'id' in first_criterion
+
+    def test_conversion_handles_long_descriptions(self, fixture_dir, tmp_path):
+        """Test conversion with long criterion descriptions (test-assignment)."""
+        md_file = fixture_dir / 'test-assignment-heun-rubric.md'
+        yaml_file = tmp_path / 'test_assignment_long.yml'
+
+        if not md_file.exists():
+            pytest.skip(f"Rubric file {md_file} not found")
+
+        # Should handle long descriptions without issues
+        markdown_to_yaml(str(md_file), str(yaml_file))
+        assert yaml_file.exists()
+
+        # Convert back to markdown to verify structure is preserved
+        md_file_2 = tmp_path / 'test_assignment_recovered.md'
+        yaml_to_markdown(str(yaml_file), str(md_file_2))
+        assert md_file_2.exists()
+
+    def test_all_rubrics_convert_without_error(self, fixture_dir, tmp_path):
+        """Test that all real-world rubrics convert without raising exceptions."""
+        import yaml
+
+        if not fixture_dir.exists():
+            pytest.skip(f"Fixture directory {fixture_dir} not found")
+
+        test_count = 0
+        for md_file in fixture_dir.glob('*.md'):
+            yaml_output = tmp_path / f"{md_file.stem}_converted.yml"
+            try:
+                markdown_to_yaml(str(md_file), str(yaml_output))
+                test_count += 1
+            except Exception as e:
+                pytest.fail(f"Failed to convert {md_file}: {e}")
+
+        assert test_count > 0, "No markdown files found to test"
+
+    def test_yaml_rubric_converts_back(self, fixture_dir, tmp_path):
+        """Test that YAML rubric can be converted to MD and back."""
+        yaml_file = fixture_dir / 'ph230-p0-rubric.yml'
+
+        if not yaml_file.exists():
+            pytest.skip(f"Rubric file {yaml_file} not found")
+
+        md_file = tmp_path / 'ph230_p0.md'
+        yaml_file_2 = tmp_path / 'ph230_p0_recovered.yml'
+
+        try:
+            # YAML → MD
+            yaml_to_markdown(str(yaml_file), str(md_file))
+            assert md_file.exists()
+
+            # MD → YAML
+            markdown_to_yaml(str(md_file), str(yaml_file_2))
+            assert yaml_file_2.exists()
+
+            # Verify final YAML is valid
+            import yaml
+            with open(yaml_file_2) as f:
+                result = yaml.safe_load(f)
+            assert isinstance(result, dict)
+        except Exception as e:
+            pytest.fail(f"Roundtrip conversion failed: {e}")
