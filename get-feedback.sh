@@ -19,6 +19,17 @@ echo "================================================"
 echo "Preparing to request feedback..."
 echo "================================================"
 
+# Check if gh (GitHub CLI) is installed
+if ! command -v gh &> /dev/null; then
+    echo "⚠️  GitHub CLI (gh) is not installed"
+    echo "Installing gh via apt..."
+    sudo apt-get update -qq
+    sudo apt-get install -y gh
+    echo "✅ GitHub CLI installed"
+else
+    echo "✅ GitHub CLI (gh) is available"
+fi
+
 # Check if we're in a git repository
 if ! git rev-parse --git-dir > /dev/null 2>&1; then
     echo "❌ Error: Not in a git repository"
