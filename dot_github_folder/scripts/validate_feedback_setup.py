@@ -74,7 +74,15 @@ def validate_config() -> Tuple[bool, Dict]:
 
 
 def validate_vision_config(config: Dict, rubric: Dict) -> List[str]:
-    """Check if vision config references valid criteria."""
+    """
+    Check if vision config references valid criteria.
+
+    Accepts criterion references by:
+    - ID (e.g., "code_quality")
+    - Name (e.g., "Code Quality")
+    - Number/position (e.g., "1" for first criterion, "3" for third)
+    - Wildcard (e.g., "*" for all)
+    """
     issues = []
     vision_config = config.get('vision', {})
 
@@ -86,20 +94,29 @@ def validate_vision_config(config: Dict, rubric: Dict) -> List[str]:
         issues.append("Vision is enabled but 'enabled_for_criteria' is empty")
         return issues
 
-    # Get all valid criterion IDs and names
+    # Get all valid criterion IDs, names, and positions
     criteria = rubric.get('criteria', [])
-    valid_ids = {c.get('id', '') for c in criteria if c.get('id')}
-    valid_names = {c.get('name', '') for c in criteria if c.get('name')}
+    valid_ids = {c.get('id', ''): i for i, c in enumerate(criteria) if c.get('id')}
+    valid_names = {c.get('name', ''): i for i, c in enumerate(criteria) if c.get('name')}
+    # For position-based references (1-indexed to match rubric table row numbers)
+    valid_positions = {str(i+1) for i in range(len(criteria))}
 
     for criterion_ref in enabled_for:
         if criterion_ref == '*':
             continue  # Wildcard is valid
 
-        if criterion_ref not in valid_ids and criterion_ref not in valid_names:
+        is_valid = (
+            criterion_ref in valid_ids or
+            criterion_ref in valid_names or
+            criterion_ref in valid_positions
+        )
+
+        if not is_valid:
             issues.append(
                 f"Vision enabled for '{criterion_ref}' but no matching criterion found.\n"
-                f"      Valid IDs: {', '.join(sorted(valid_ids))}\n"
-                f"      Valid names: {', '.join(sorted(valid_names))}"
+                f"      Valid by ID: {', '.join(sorted(valid_ids.keys()))}\n"
+                f"      Valid by name: {', '.join(sorted(valid_names.keys()))}\n"
+                f"      Valid by position: {', '.join(sorted(valid_positions))}"
             )
 
     return issues

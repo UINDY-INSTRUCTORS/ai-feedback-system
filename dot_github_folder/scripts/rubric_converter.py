@@ -224,6 +224,7 @@ def parse_wide_table_rubric(content: str) -> Dict[str, Any]:
             'id': criterion_id,
             'name': criterion_name,
             'weight': weight,
+            'description': f"Evaluation of {criterion_name}",
             'levels': {},
             'keywords': [],
             'common_issues': []
