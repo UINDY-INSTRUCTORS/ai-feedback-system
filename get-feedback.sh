@@ -39,6 +39,9 @@ fi
 # Get the repository in owner/repo format from git remote
 REPO=$(git remote get-url origin | sed 's/.*[:/]\([^/]*\)\/\([^/]*\)\.git$/\1\/\2/')
 
+# Refresh git index to avoid false positives from stale stat info
+git update-index --refresh > /dev/null 2>&1 || true
+
 # Check for uncommitted changes
 if ! git diff-index --quiet HEAD --; then
     echo "❌ Error: You have uncommitted changes"
@@ -79,7 +82,7 @@ echo "(Waiting a moment for GitHub to register the workflow...)"
 sleep 2
 
 # Get the most recent classroom.yml workflow run on main
-WORKFLOW_JSON=$(gh run list --repo="$REPO" --workflow=classroom.yml --branch=main --limit=1 --json status,conclusion,url 2>/dev/null)
+WORKFLOW_JSON=$(gh run list --repo="$REPO" --workflow=classroom.yml --branch=main --limit=1 --json status,conclusion,url 2>/dev/null || true)
 
 if [ -z "$WORKFLOW_JSON" ]; then
     echo "⚠️  Warning: Could not find the classroom workflow run"
