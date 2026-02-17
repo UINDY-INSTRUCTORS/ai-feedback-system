@@ -19,6 +19,14 @@ echo "================================================"
 echo "Preparing to request feedback..."
 echo "================================================"
 
+# Check if we're running inside a GitHub Codespace
+if [ "${CODESPACES}" != "true" ]; then
+    echo "❌ Error: This script must be run inside a GitHub Codespace"
+    echo ""
+    echo "Open this repository in a GitHub Codespace and run the script from there."
+    exit 1
+fi
+
 # Check if we're in a git repository
 if ! git rev-parse --git-dir > /dev/null 2>&1; then
     echo "❌ Error: Not in a git repository"
