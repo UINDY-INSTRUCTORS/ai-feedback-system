@@ -125,9 +125,35 @@ def build_issue_footer(report_stats: dict, config: dict) -> str:
     stats_table = f"| Metric | Count |\n|--------|-------|\n| Words | {report_stats.get('word_count', 0)} |\n| Figures | {report_stats.get('figures', 0)} |"
     return f"\n### 📚 Resources\n- [View Rubric]({rubric_url})\n\n### 📋 Report Statistics\n{stats_table}\n\n---\n*🤖 Powered by [GitHub Models](https://github.com/features/models) ({model}).*"
 
+def save_feedback_to_file(feedback_body: str, footer: str, config: dict, output_path: str):
+    """Save feedback to a flat file instead of creating a GitHub issue."""
+    tag_name = os.environ.get('TAG_NAME', 'feedback')
+    date = datetime.now().strftime('%Y-%m-%d')
+    time = datetime.now().strftime('%H:%M:%S UTC')
+    model = config.get('model', {}).get('primary', 'gpt-4o')
+
+    header = f"## 🤖 AI Report Feedback\n> **Requested**: `{tag_name}` • **Generated**: {date} at {time}\n> **Model**: {model}\n\n---\n\n"
+    full_body = header + feedback_body + footer
+
+    # Create output directory if it doesn't exist
+    output_dir = os.path.dirname(output_path)
+    if output_dir and not os.path.exists(output_dir):
+        os.makedirs(output_dir, exist_ok=True)
+
+    try:
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write(full_body)
+        print(f"✅ Feedback saved to: {output_path}")
+        return output_path
+    except IOError as e:
+        print(f"ERROR: Failed to save feedback to file: {e}", file=sys.stderr)
+        sys.exit(1)
+
 def main():
-    """Load feedback JSON, format it, and create a GitHub issue or print for local test."""
+    """Load feedback JSON, format it, and create a GitHub issue or save to file."""
     is_local_test = os.environ.get('LOCAL_TEST', 'false').lower() == 'true'
+    output_format = os.environ.get('OUTPUT_FORMAT', 'github_issue').lower()
+    output_path = os.environ.get('OUTPUT_PATH', 'feedback-output.md')
 
     try:
         with open('.github/config.yml', 'r', encoding='utf-8') as f: config = yaml.safe_load(f)
@@ -141,21 +167,41 @@ def main():
     feedback_body = format_feedback_body(feedback_data, rubric_data, config)
     footer = build_issue_footer(report_data.get('stats', {}), config)
 
-    if is_local_test:
-        header = "## 🤖 AI Report Feedback\n\n---\n\n"
+    # Check config file for output settings (takes precedence over env vars)
+    output_config = config.get('output', {})
+    if output_config.get('format'):
+        output_format = output_config.get('format')
+    if output_config.get('path'):
+        output_path = output_config.get('path')
+
+    if is_local_test or output_format == 'flat_file' or output_format == 'markdown_file':
+        tag_name = os.environ.get('TAG_NAME', 'feedback')
+        date = datetime.now().strftime('%Y-%m-%d')
+        time = datetime.now().strftime('%H:%M:%S UTC')
+        model = config.get('model', {}).get('primary', 'gpt-4o')
+
+        header = f"## 🤖 AI Report Feedback\n> **Requested**: `{tag_name}` • **Generated**: {date} at {time}\n> **Model**: {model}\n\n---\n\n"
         full_body = header + feedback_body + footer
-        print("--- LOCAL TEST: ISSUE BODY PREVIEW ---")
-        print(full_body)
-        print("--- END PREVIEW ---")
+
+        if is_local_test:
+            # Just print to console for quick testing
+            print("--- LOCAL TEST: ISSUE BODY PREVIEW ---")
+            print(full_body)
+            print("--- END PREVIEW ---")
+        else:
+            # Save to file
+            save_feedback_to_file(feedback_body, footer, config, output_path)
+            print("\n✨ Done! Feedback saved to file.")
     else:
+        # Create GitHub issue (default behavior)
         tag_name = os.environ.get('TAG_NAME', 'feedback')
         date = datetime.now().strftime('%Y-%m-%d')
         title = config.get('issue_title_template', '📋 Feedback: {tag_name} ({date})').format(tag_name=tag_name, date=date)
-        
+
         time = datetime.now().strftime('%H:%M:%S UTC')
         model = config.get('model', {}).get('primary', 'gpt-4o')
         header = f"## 🤖 AI Report Feedback\n> **Requested**: `{tag_name}` • **Generated**: {date} at {time}\n> **Model**: {model}\n\n---\n\n"
-        
+
         full_body = header + feedback_body + footer
 
         create_github_issue(title, full_body, config.get('issue_label', 'ai-feedback'))

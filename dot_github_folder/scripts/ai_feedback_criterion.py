@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """
-Criterion-based AI feedback using GitHub Models API with AI-based section extraction.
+Criterion-based AI feedback with multi-provider support.
+
+Supports GitHub Models, OpenRouter, Anthropic, Gemini, and OpenAI.
+Provider is configured via env vars, ~/.ai-feedback/config.yml, or per-repo config.
 """
 
 import os
@@ -17,6 +20,7 @@ from typing import Dict, Any, Tuple, List, Optional
 sys.path.append(str(Path(__file__).parent))
 from section_extractor import extract_sections_for_criterion_ai
 from image_utils import encode_image_to_base64, optimize_images_for_payload
+from ai_provider import call_ai, resolve_provider_config, print_provider_info
 
 # Load environment variables from .env file if it exists (for local testing)
 try:
@@ -24,9 +28,6 @@ try:
     load_dotenv()
 except ImportError:
     pass
-
-# GitHub Models API endpoint
-API_BASE = "https://models.inference.ai.azure.com"
 
 # Global debug configuration (set in main())
 DEBUG_CONFIG = None
@@ -303,157 +304,55 @@ Reference specific images in your feedback (e.g., "In the schematic 'images/circ
     return prompt, relevant_content, image_paths
 
 
-def call_github_models_api(
+def build_ai_messages(
     prompt: str,
-    model: str,
     config: dict,
     image_paths: Optional[List[str]] = None,
-    max_retries: int = 3
-) -> tuple:
+) -> list:
     """
-    Call GitHub Models API, handling both text and vision requests.
-    Implements exponential backoff retry on 429 rate limit errors.
-    Optimizes images to fit within payload limits.
+    Build the messages list for the AI call, including image optimization.
 
     Returns:
-        tuple: (feedback_text, response_data, request_payload)
+        list: OpenAI-format messages list
     """
-    token = os.environ.get('GITHUB_TOKEN')
-    if not token:
-        raise ValueError("GITHUB_TOKEN environment variable not set")
-
-    endpoint = f"{API_BASE}/chat/completions"
-    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {token}"}
-
-    # --- Build message payload (text only first) ---
     messages = [
         {"role": "system", "content": "You are an expert instructor providing constructive, specific feedback on student technical reports in JSON format."},
     ]
     user_content = [{"type": "text", "text": prompt}]
-    messages.append({"role": "user", "content": user_content})
 
-    # Calculate text payload size
-    text_payload = {
-        "model": model,
-        "messages": messages,
-        "response_format": {"type": "json_object"},
-        "temperature": 0.3,
-        "max_tokens": config.get('max_output_tokens', 2000)
-    }
-    text_payload_json = json.dumps(text_payload)
-    text_size_bytes = len(text_payload_json.encode('utf-8'))
-
-    # Optimize images for payload size
-    optimized_images = []
     if image_paths:
         print(f"   Processing {len(image_paths)} image(s) for vision model...")
+        # Calculate text payload size for image budget
+        text_size_bytes = len(json.dumps({"messages": messages}).encode('utf-8'))
         optimized_images = optimize_images_for_payload(
             image_paths=image_paths,
             text_size_bytes=text_size_bytes,
             config=config
         )
-
         if optimized_images:
-            # Add optimized images to user content
-            user_content = [{"type": "text", "text": prompt}]
             for img_data in optimized_images:
                 user_content.append({
                     "type": "image_url",
                     "image_url": {"url": img_data['base64_data']}
                 })
-            messages[-1]["content"] = user_content
-        elif image_paths:
-            print(f"   ⚠️  Could not fit images in payload, proceeding with text only")
-    # --- End message payload ---
+        else:
+            print(f"   Could not fit images in payload, proceeding with text only")
 
-    payload = {
-        "model": model,
-        "messages": messages,
-        "response_format": {"type": "json_object"},
-        "temperature": 0.3,
-        "max_tokens": config.get('max_output_tokens', 2000)
-    }
-
-    # Retry loop with exponential backoff
-    timeout = config.get('request_timeout', 120)
-    last_error = None
-
-    for attempt in range(max_retries):
-        try:
-            print(f"   Calling {model} API... (images: {len(image_paths or [])}, attempt {attempt + 1}/{max_retries})")
-            response = requests.post(endpoint, headers=headers, json=payload, timeout=timeout)
-            response.raise_for_status()
-
-            result = response.json()
-            feedback = result['choices'][0]['message']['content']
-
-            usage = result.get('usage', {})
-            print(f"   ✅ Tokens: {usage.get('total_tokens', 0)} (prompt: {usage.get('prompt_tokens', 0)}, completion: {usage.get('completion_tokens', 0)})")
-
-            # Capture rate limit info from response headers
-            rate_limit_info = {
-                'limit': response.headers.get('x-ratelimit-limit'),
-                'remaining': response.headers.get('x-ratelimit-remaining'),
-                'reset': response.headers.get('x-ratelimit-reset'),
-                'retry_after': response.headers.get('retry-after'),
-            }
-            result['_rate_limit'] = {k: v for k, v in rate_limit_info.items() if v is not None}
-
-            return feedback, result, payload
-
-        except requests.exceptions.HTTPError as e:
-            last_error = e
-            if e.response.status_code == 429:
-                # Rate limited - implement backoff
-                if attempt < max_retries - 1:
-                    # Check for Retry-After header
-                    retry_after = e.response.headers.get('Retry-After')
-                    if retry_after:
-                        try:
-                            wait_time = int(retry_after)
-                        except (ValueError, TypeError):
-                            # If not an integer, use exponential backoff
-                            wait_time = 2 ** attempt
-                    else:
-                        # Exponential backoff: 1s, 2s, 4s, 8s, etc.
-                        wait_time = 2 ** attempt
-
-                    print(f"   ⚠️  Rate limited (429). Waiting {wait_time}s before retry {attempt + 1}/{max_retries - 1}...")
-                    time.sleep(wait_time)
-                    continue
-                else:
-                    print(f"   ❌ Rate limited after {max_retries} attempts. Giving up.")
-                    raise
-            elif e.response.status_code == 413:
-                # Payload too large - try with no images as final fallback
-                if attempt < max_retries - 1 and optimized_images:
-                    print(f"   ⚠️  Payload too large (413). Retrying without images...")
-                    # Rebuild payload without images
-                    messages_no_images = [
-                        {"role": "system", "content": "You are an expert instructor providing constructive, specific feedback on student technical reports in JSON format."},
-                        {"role": "user", "content": [{"type": "text", "text": prompt}]}
-                    ]
-                    payload["messages"] = messages_no_images
-                    optimized_images = []
-                    continue
-                else:
-                    print(f"   ❌ Payload too large (413). Cannot proceed.")
-                    raise
-            else:
-                # Not a rate limit or payload error - raise immediately
-                raise
-
-    # Should not reach here, but just in case
-    if last_error:
-        raise last_error
+    messages.append({"role": "user", "content": user_content})
+    return messages
 
 
-def analyze_criterion(report: dict, criterion: dict, guidance: str, config: dict, criterion_index: int = 0) -> dict:
+def analyze_criterion(report: dict, criterion: dict, guidance: str, config: dict,
+                      criterion_index: int = 0, provider_config: dict = None) -> dict:
     """Analyze a single criterion and return feedback."""
     criterion_name = criterion['name']
     criterion_id = criterion.get('id', f'criterion_{criterion_index}')
-    model = config.get('model', {}).get('primary', 'gpt-4o')
-    print(f"\n📊 Analyzing: {criterion_name}")
+
+    if provider_config is None:
+        provider_config = resolve_provider_config(config)
+
+    model = provider_config['model']
+    print(f"\n Analyzing: {criterion_name}")
 
     prompt, context, image_paths = "", "", []
     metadata = {
@@ -462,6 +361,7 @@ def analyze_criterion(report: dict, criterion: dict, guidance: str, config: dict
         "criterion_index": criterion_index,
         "timestamp": datetime.now().isoformat(),
         "model_used": model,
+        "provider": provider_config['provider'],
         "success": False
     }
 
@@ -471,9 +371,13 @@ def analyze_criterion(report: dict, criterion: dict, guidance: str, config: dict
         metadata["image_paths"] = image_paths
         metadata["requested_images"] = len(image_paths)
 
+        messages = build_ai_messages(prompt, config, image_paths=image_paths)
+
         start_time = datetime.now().timestamp()
-        feedback_json, response_data, request_payload = call_github_models_api(
-            prompt, model, config, image_paths=image_paths
+        feedback_json, response_data, request_payload = call_ai(
+            messages, model, config,
+            provider_config=provider_config,
+            json_mode=True,
         )
         end_time = datetime.now().timestamp()
 
@@ -486,12 +390,14 @@ def analyze_criterion(report: dict, criterion: dict, guidance: str, config: dict
 
         # Count images actually sent (for optimization tracking)
         images_in_request = 0
-        for content_item in request_payload.get('messages', [])[-1].get('content', []):
+        last_msg = request_payload.get('messages', [{}])[-1] if 'messages' in request_payload else {}
+        for content_item in last_msg.get('content', []):
             if isinstance(content_item, dict) and content_item.get('type') == 'image_url':
                 images_in_request += 1
 
         metadata.update({
-            "api_endpoint": f"{API_BASE}/chat/completions",
+            "provider": provider_config['provider'],
+            "api_base": provider_config['api_base'],
             "request_time_seconds": round(end_time - start_time, 2),
             "tokens": tokens,
             "success": True,
@@ -506,13 +412,13 @@ def analyze_criterion(report: dict, criterion: dict, guidance: str, config: dict
 
         return {
             'criterion': criterion_name,
-            'feedback': feedback_content, # Return the parsed JSON
+            'feedback': feedback_content,
             'success': True,
             'tokens': tokens
         }
 
     except Exception as e:
-        print(f"   ❌ Failed: {e}")
+        print(f"   Failed: {e}")
         metadata["error"] = str(e)
         save_debug_criterion_data(metadata, context, prompt)
         return {
@@ -535,14 +441,20 @@ def main():
     report = load_report()
 
     init_debug_mode(config)
-    
+
+    # Resolve provider configuration
+    provider_config = resolve_provider_config(config)
+    print(f"\nProvider configuration:")
+    print_provider_info(provider_config)
+
     print(f"\nAnalyzing {len(rubric.get('criteria', []))} criteria...\n")
 
     all_feedback_json = []
     total_tokens = 0
 
     for i, criterion in enumerate(rubric.get('criteria', []), 1):
-        result = analyze_criterion(report, criterion, guidance, config, criterion_index=i)
+        result = analyze_criterion(report, criterion, guidance, config,
+                                   criterion_index=i, provider_config=provider_config)
         all_feedback_json.append(result)
         if result['success']:
             total_tokens += result.get('tokens', {}).get('total_tokens', 0)

@@ -17,8 +17,7 @@ from typing import Dict, Any, Tuple, List
 # Local script imports
 sys.path.append(str(Path(__file__).parent))
 from image_utils import filter_images_by_token_budget, validate_image_file
-
-API_BASE = "https://models.inference.ai.azure.com"
+from ai_provider import call_ai, resolve_provider_config
 
 def strip_callout_boxes(text: str) -> Tuple[str, bool]:
     """
@@ -432,80 +431,34 @@ Once you've identified the relevant sections:
 **Extracted Sections (relevant to "{criterion_name}"){max_content_note}:"""
 
 def call_extraction_api(prompt: str, model: str, max_retries: int = 3) -> str:
-    """Calls the GitHub Models API for text extraction with exponential backoff retry."""
-    token = os.environ.get('GITHUB_TOKEN')
-    if not token:
-        raise ValueError("GITHUB_TOKEN environment variable not set")
-
-    endpoint = f"{API_BASE}/chat/completions"
-    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {token}"}
-
+    """Call AI provider for text extraction. Uses the provider abstraction layer."""
     # Estimate tokens before making the API call (rough: ~4 chars per token)
     estimated_prompt_tokens = len(prompt) // 4
-    estimated_total_tokens = estimated_prompt_tokens + 4000  # 4000 = max_tokens for response
+    estimated_total_tokens = estimated_prompt_tokens + 4000
 
     if estimated_total_tokens > 15000:
-        print(f"   ⚠️  HIGH TOKEN USAGE: Estimated ~{estimated_total_tokens} tokens (prompt: {estimated_prompt_tokens}, output: 4000)")
+        print(f"   HIGH TOKEN USAGE: Estimated ~{estimated_total_tokens} tokens (prompt: {estimated_prompt_tokens}, output: 4000)")
 
-    payload = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": "You are a thorough document analyzer. Extract relevant sections verbatim. Balance comprehensiveness with conciseness based on document size."},
-            {"role": "user", "content": prompt}
-        ],
-        "temperature": 0.1,
-        "max_tokens": 4000
+    messages = [
+        {"role": "system", "content": "You are a thorough document analyzer. Extract relevant sections verbatim. Balance comprehensiveness with conciseness based on document size."},
+        {"role": "user", "content": prompt}
+    ]
+
+    # Resolve provider, using the extractor model
+    provider_config = resolve_provider_config()
+    # Override model with the extractor-specific model
+    extraction_config = {
+        'max_output_tokens': 4000,
+        'request_timeout': 90,
     }
 
-    # Retry loop with exponential backoff
-    last_error = None
-
-    for attempt in range(max_retries):
-        try:
-            response = requests.post(endpoint, headers=headers, json=payload, timeout=90)
-            response.raise_for_status()
-            result = response.json()
-            extracted = result['choices'][0]['message']['content'].strip()
-
-            usage = result.get('usage', {})
-            print(f"   Extraction tokens: {usage.get('total_tokens', 0)} (prompt: {usage.get('prompt_tokens', 0)}, completion: {usage.get('completion_tokens', 0)})")
-
-            # Log rate limit info if available
-            remaining = response.headers.get('x-ratelimit-remaining')
-            if remaining:
-                print(f"   Rate limit remaining: {remaining}")
-
-            return extracted
-
-        except requests.exceptions.HTTPError as e:
-            last_error = e
-            if e.response.status_code == 429:
-                # Rate limited - implement backoff
-                if attempt < max_retries - 1:
-                    # Check for Retry-After header
-                    retry_after = e.response.headers.get('Retry-After')
-                    if retry_after:
-                        try:
-                            wait_time = int(retry_after)
-                        except (ValueError, TypeError):
-                            wait_time = 2 ** attempt
-                    else:
-                        # Exponential backoff: 1s, 2s, 4s, 8s, etc.
-                        wait_time = 2 ** attempt
-
-                    print(f"   ⚠️  Extraction rate limited (429). Waiting {wait_time}s before retry {attempt + 1}/{max_retries - 1}...")
-                    time.sleep(wait_time)
-                    continue
-                else:
-                    print(f"   ❌ Extraction rate limited after {max_retries} attempts. Giving up.")
-                    raise
-            else:
-                # Not a rate limit error - raise immediately
-                raise
-
-    # Should not reach here, but just in case
-    if last_error:
-        raise last_error
+    text, result, payload = call_ai(
+        messages, model, extraction_config,
+        provider_config=provider_config,
+        json_mode=False,
+        max_retries=max_retries,
+    )
+    return text.strip()
 
 if __name__ == '__main__':
     # A simple test function can be added here if needed
