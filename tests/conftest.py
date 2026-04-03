@@ -385,10 +385,10 @@ We successfully implemented the Euler method.
             'date': '2024-01-20',
         },
         'structure': [
-            {'level': 1, 'heading': 'Theory & Explanation'},
-            {'level': 2, 'heading': 'Implementation'},
-            {'level': 2, 'heading': 'Results'},
-            {'level': 2, 'heading': 'Conclusion'},
+            {'level': 1, 'text': 'Theory & Explanation'},
+            {'level': 2, 'text': 'Implementation'},
+            {'level': 2, 'text': 'Results'},
+            {'level': 2, 'text': 'Conclusion'},
         ],
         'figures': {
             'count': 1,

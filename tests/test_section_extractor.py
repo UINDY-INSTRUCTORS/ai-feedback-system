@@ -155,28 +155,31 @@ class TestAugmentWithNotebookOutputs:
     def test_simple_embed_replacement(self):
         """Test replacement of a single embed shortcode."""
         text = "Results: {{< embed notebook.ipynb#plot >}}"
-        notebook_outputs = {
-            'plot': 'Generated plot visualization'
-        }
         report = {
-            'notebook_outputs': notebook_outputs
+            'notebook_outputs': [
+                {'embed': 'notebook.ipynb#plot', 'cell_id': 'plot',
+                 'outputs': {'text': ['Generated plot visualization']}}
+            ]
         }
 
         result = augment_with_notebook_outputs(report, text)
 
         # Embed should be replaced with content
-        assert 'notebook.ipynb' not in result or 'Generated plot' in result
+        assert 'Generated plot' in result
 
     def test_multiple_embeds(self):
         """Test replacement of multiple embeds."""
         text = """First: {{< embed nb.ipynb#fig1 >}}
 
 Second: {{< embed nb.ipynb#fig2 >}}"""
-        notebook_outputs = {
-            'fig1': 'Figure 1 content',
-            'fig2': 'Figure 2 content',
+        report = {
+            'notebook_outputs': [
+                {'embed': 'nb.ipynb#fig1', 'cell_id': 'fig1',
+                 'outputs': {'text': ['Figure 1 content']}},
+                {'embed': 'nb.ipynb#fig2', 'cell_id': 'fig2',
+                 'outputs': {'text': ['Figure 2 content']}},
+            ]
         }
-        report = {'notebook_outputs': notebook_outputs}
 
         result = augment_with_notebook_outputs(report, text)
 
@@ -185,7 +188,7 @@ Second: {{< embed nb.ipynb#fig2 >}}"""
     def test_embed_with_missing_output(self):
         """Test handling of embed without corresponding output."""
         text = "Content: {{< embed nb.ipynb#missing >}}"
-        report = {'notebook_outputs': {}}
+        report = {'notebook_outputs': []}
 
         result = augment_with_notebook_outputs(report, text)
 
@@ -195,7 +198,7 @@ Second: {{< embed nb.ipynb#fig2 >}}"""
     def test_no_embeds(self):
         """Test text without embeds."""
         text = "Regular text without embeds"
-        report = {'notebook_outputs': {}}
+        report = {'notebook_outputs': []}
 
         result = augment_with_notebook_outputs(report, text)
 
@@ -209,8 +212,12 @@ Second: {{< embed nb.ipynb#fig2 >}}"""
 Analysis here {{< embed nb.ipynb#plot >}} more analysis.
 
 Conclusion."""
-        notebook_outputs = {'plot': '[PLOT]'}
-        report = {'notebook_outputs': notebook_outputs}
+        report = {
+            'notebook_outputs': [
+                {'embed': 'nb.ipynb#plot', 'cell_id': 'plot',
+                 'outputs': {'text': ['[PLOT]']}}
+            ]
+        }
 
         result = augment_with_notebook_outputs(report, text)
 
@@ -221,7 +228,12 @@ Conclusion."""
     def test_deterministic_augmentation(self):
         """Test that augmentation is deterministic."""
         text = "{{< embed nb.ipynb#cell >}}"
-        report = {'notebook_outputs': {'cell': 'output'}}
+        report = {
+            'notebook_outputs': [
+                {'embed': 'nb.ipynb#cell', 'cell_id': 'cell',
+                 'outputs': {'text': ['output']}}
+            ]
+        }
 
         result1 = augment_with_notebook_outputs(report, text)
         result2 = augment_with_notebook_outputs(report, text)
@@ -235,11 +247,13 @@ class TestShouldEnableVisionForCriterion:
     """Tests for vision enablement decision logic."""
 
     def test_vision_explicitly_enabled(self, sample_criterion_with_vision, sample_config):
-        """Test that explicitly enabled vision is used."""
+        """Test that explicitly enabled vision is used via enabled_for_criteria."""
+        vision_config = sample_config['vision'].copy()
+        vision_config['enabled_for_criteria'] = ['results']
         result = should_enable_vision_for_criterion(
             report={},
             criterion=sample_criterion_with_vision,
-            vision_config=sample_config['vision'],
+            vision_config=vision_config,
             extracted_text="Some text"
         )
 
@@ -321,43 +335,43 @@ class TestGetImagePriority:
     """Tests for image priority calculation."""
 
     def test_keyword_priority(self):
-        """Test that keywords affect priority."""
+        """Test that matching keyword returns its index (lower = higher priority)."""
         figure_dict = {
             'caption': 'Convergence plot showing results',
             'path': 'plot.png'
         }
-        keywords = ['plot', 'convergence', 'results']
+        priority_list = ['plot', 'convergence', 'results']
 
-        priority = get_image_priority(figure_dict, keywords)
+        priority = get_image_priority(figure_dict, priority_list)
 
-        # Should have positive priority for matching keywords
-        assert priority > 0
+        # 'plot' matches first at index 0
+        assert priority == 0
 
     def test_no_keyword_match(self):
-        """Test priority when keywords don't match."""
+        """Test priority when keywords don't match returns len(list)."""
         figure_dict = {
             'caption': 'Unrelated diagram',
-            'path': 'diagram.png'
+            'path': 'other.png'
         }
-        keywords = ['plot', 'graph', 'chart']
+        priority_list = ['plot', 'graph', 'chart']
 
-        priority = get_image_priority(figure_dict, keywords)
+        priority = get_image_priority(figure_dict, priority_list)
 
-        # Should have lower priority
-        assert isinstance(priority, int)
+        # No match -> returns len(priority_list)
+        assert priority == len(priority_list)
 
     def test_multiple_keyword_matches(self):
-        """Test that multiple matches increase priority."""
+        """Test that first matching keyword determines priority."""
         figure_dict = {
             'caption': 'Results plot showing error convergence',
             'path': 'plot.png'
         }
-        keywords = ['plot', 'error', 'convergence', 'results']
+        priority_list = ['plot', 'error', 'convergence', 'results']
 
-        priority = get_image_priority(figure_dict, keywords)
+        priority = get_image_priority(figure_dict, priority_list)
 
-        # More matches = higher priority
-        assert priority > 0
+        # 'plot' matches first at index 0
+        assert priority == 0
 
     def test_case_insensitive_matching(self):
         """Test that keyword matching is case-insensitive."""
@@ -365,12 +379,12 @@ class TestGetImagePriority:
             'caption': 'Results Plot',
             'path': 'plot.png'
         }
-        keywords = ['plot', 'results']
+        priority_list = ['plot', 'results']
 
-        priority = get_image_priority(figure_dict, keywords)
+        priority = get_image_priority(figure_dict, priority_list)
 
-        # Should match despite case differences
-        assert priority > 0
+        # 'plot' matches at index 0
+        assert priority == 0
 
 
 @pytest.mark.deterministic

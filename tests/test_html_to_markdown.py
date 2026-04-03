@@ -102,7 +102,7 @@ class TestConvertList:
 
     def test_ordered_list(self, sample_html_list_ordered):
         """Test conversion of ordered list."""
-        result = convert_list(sample_html_list_ordered)
+        result = convert_list(sample_html_list_ordered, ordered=True)
 
         assert 'Initialize y and t arrays' in result
         assert 'compute dy/dt' in result
@@ -232,7 +232,7 @@ class TestConvertNotebookOutputToMarkdown:
     def test_text_output(self):
         """Test conversion of text output."""
         output_dict = {
-            'text/plain': 'Hello World'
+            'text': ['Hello World']
         }
         result = convert_notebook_output_to_markdown(output_dict)
 
@@ -242,40 +242,44 @@ class TestConvertNotebookOutputToMarkdown:
     def test_html_output(self):
         """Test conversion of HTML output."""
         output_dict = {
-            'text/html': '<table><tr><td>Data</td></tr></table>'
+            'html': ['<table><tr><td>Data</td></tr></table>']
         }
         result = convert_notebook_output_to_markdown(output_dict)
 
         assert result is not None
+        assert 'html_as_markdown' in result
 
     def test_markdown_output(self):
         """Test conversion of markdown output."""
         output_dict = {
-            'text/markdown': '# Header\n\nSome text'
+            'markdown': ['# Header\n\nSome text']
         }
         result = convert_notebook_output_to_markdown(output_dict)
 
         assert result is not None
+        assert 'markdown' in result
 
     def test_latex_output(self):
         """Test conversion of LaTeX output."""
         output_dict = {
-            'text/latex': r'$\frac{x^2}{2}$'
+            'latex': [r'$\frac{x^2}{2}$']
         }
         result = convert_notebook_output_to_markdown(output_dict)
 
         assert result is not None
+        assert 'latex' in result
 
     def test_multiple_outputs(self):
         """Test handling of multiple output formats."""
         output_dict = {
-            'text/plain': 'Text version',
-            'text/html': '<p>HTML version</p>',
+            'text': ['Text version'],
+            'html': ['<p>HTML version</p>'],
         }
         result = convert_notebook_output_to_markdown(output_dict)
 
-        # Should pick one representation
+        # Should have both representations
         assert result is not None
+        assert 'text' in result
 
     def test_empty_output(self):
         """Test handling of empty output."""

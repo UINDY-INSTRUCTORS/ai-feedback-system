@@ -146,7 +146,7 @@ class TestExtractStructure:
         structure = _extract_structure(body)
 
         assert len(structure) >= 1
-        assert any(h['heading'] == 'Main Title' for h in structure)
+        assert any(h['text'] == 'Main Title' for h in structure)
 
     def test_multiple_heading_levels(self):
         """Test extraction of multiple heading levels."""
@@ -164,9 +164,9 @@ Even more"""
         structure = _extract_structure(body)
 
         # Should extract all headings
-        assert any(h['heading'] == 'Level 1' for h in structure)
-        assert any(h['heading'] == 'Level 2' for h in structure)
-        assert any(h['heading'] == 'Level 3' for h in structure)
+        assert any(h['text'] == 'Level 1' for h in structure)
+        assert any(h['text'] == 'Level 2' for h in structure)
+        assert any(h['text'] == 'Level 3' for h in structure)
 
     def test_heading_levels(self):
         """Test that heading levels are correctly identified."""
@@ -194,7 +194,7 @@ Even more"""
         body = "# Introduction & Theory\n\n## Results: Analysis (Part 1)\n\n### FAQ?"
         structure = _extract_structure(body)
 
-        assert any("Introduction" in h['heading'] for h in structure)
+        assert any("Introduction" in h['text'] for h in structure)
 
 
 @pytest.mark.deterministic
@@ -282,21 +282,21 @@ More text after code."""
         assert stats.get('word_count') < 20
 
     def test_code_block_count(self):
-        """Test detection of code blocks."""
-        body = """```python
+        """Test detection of code blocks (Quarto-style {python} fences)."""
+        body = """```{python}
 code1
 ```
 
 Text
 
-```javascript
+```{python}
 code2
 ```
 
 More text"""
         stats = _calculate_stats(body, figure_count=0)
 
-        assert stats.get('code_block_count') == 2
+        assert stats.get('code_blocks') == 2
 
     def test_equation_count(self):
         """Test detection of LaTeX equations."""
@@ -306,14 +306,14 @@ And another equation: $e = mc^2$"""
         stats = _calculate_stats(body, figure_count=0)
 
         # Should detect LaTeX
-        assert stats.get('equation_count') >= 0
+        assert stats.get('equations') >= 0
 
     def test_figure_count(self):
         """Test figure count parameter."""
         body = "Some text"
         stats = _calculate_stats(body, figure_count=3)
 
-        assert stats.get('figure_count') == 3
+        assert stats.get('figures') == 3
 
     def test_empty_body(self):
         """Test stats for empty body."""
@@ -329,7 +329,7 @@ And another equation: $e = mc^2$"""
 
 This is the introduction with some text.
 
-```python
+```{python}
 x = 1
 y = 2
 ```
@@ -346,8 +346,8 @@ Text with results."""
         stats = _calculate_stats(body, figure_count=1)
 
         assert stats.get('word_count') > 0
-        assert stats.get('code_block_count') >= 1
-        assert stats.get('figure_count') == 1
+        assert stats.get('code_blocks') >= 1
+        assert stats.get('figures') == 1
 
 
 @pytest.mark.deterministic
