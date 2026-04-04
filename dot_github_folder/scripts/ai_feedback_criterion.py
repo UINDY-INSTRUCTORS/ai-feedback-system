@@ -230,7 +230,12 @@ def build_criterion_prompt(report: dict, criterion: dict, guidance_excerpt: str,
     max_score = criterion.get('weight', 0)
 
     # Check if numerical scoring is enabled (defaults to false for formative assessment)
-    scoring_enabled = config.get('feedback', {}).get('scoring_enabled', False)
+    # Env var SCORING_ENABLED overrides config (for batch/local runs)
+    scoring_env = os.environ.get('SCORING_ENABLED')
+    if scoring_env is not None:
+        scoring_enabled = scoring_env.lower() in ('true', '1', 'yes')
+    else:
+        scoring_enabled = config.get('feedback', {}).get('scoring_enabled', False)
 
     # Build JSON schema based on scoring setting
     if scoring_enabled:

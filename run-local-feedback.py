@@ -25,6 +25,7 @@ Usage:
 import os
 import sys
 import json
+import csv
 import yaml
 import shutil
 import subprocess
@@ -130,12 +131,18 @@ def render_quarto_local(repo_path: Path, env: dict):
 def run_feedback_pipeline(repo_path: Path, output_path: Path = None,
                           provider: str = None, model: str = None,
                           use_docker: bool = False, skip_render: bool = False,
-                          docker_image: str = None, docker_quarto: str = None):
-    """Run the complete feedback pipeline for a repo."""
+                          docker_image: str = None, docker_quarto: str = None,
+                          scoring: bool = None):
+    """Run the complete feedback pipeline for a repo.
+
+    Returns:
+        dict with 'success' bool and 'scores' from extract_scores_from_feedback,
+        or False on validation failure.
+    """
     repo_path = Path(repo_path).resolve()
 
     if not validate_repo(repo_path):
-        return False
+        return {'success': False, 'scores': {'repo': repo_path.name, 'criteria': {}, 'error': 'Validation failed'}}
 
     print(f"\n{'='*60}")
     print(f"Processing: {repo_path.name}")
@@ -158,6 +165,8 @@ def run_feedback_pipeline(repo_path: Path, output_path: Path = None,
             env['AI_PROVIDER'] = provider
         if model:
             env['AI_MODEL'] = model
+        if scoring is not None:
+            env['SCORING_ENABLED'] = 'true' if scoring else 'false'
 
         if output_path:
             env['OUTPUT_PATH'] = str(output_path)
@@ -227,16 +236,250 @@ def run_feedback_pipeline(repo_path: Path, output_path: Path = None,
         print("✓ Feedback saved")
 
         print(f"\n✅ Successfully processed {repo_path.name}")
-        return True
+        scores = extract_scores_from_feedback(repo_path)
+        return {'success': True, 'scores': scores}
 
     except subprocess.TimeoutExpired:
         print("❌ Process timed out")
-        return False
+        return {'success': False, 'scores': {'repo': repo_path.name, 'criteria': {}, 'error': 'Timed out'}}
     except Exception as e:
         print(f"❌ Error: {e}")
-        return False
+        return {'success': False, 'scores': {'repo': repo_path.name, 'criteria': {}, 'error': str(e)}}
     finally:
         os.chdir(original_cwd)
+
+def extract_scores_from_feedback(repo_path: Path) -> dict:
+    """
+    Read feedback.json from a repo and extract per-criterion scores.
+
+    Returns dict like:
+      {
+        'repo': 'student-repo-name',
+        'criteria': {
+            'Theory & Explanation': {'score': 18, 'max': 20, 'pct': 90.0, 'assessment': 'Exemplary'},
+            'Implementation/Code':  {'score': 30, 'max': 40, 'pct': 75.0, 'assessment': 'Satisfactory'},
+            ...
+        }
+      }
+
+    When numerical scoring is disabled, score/pct will be None and only
+    assessment is populated.
+    """
+    feedback_path = repo_path / 'feedback.json'
+    if not feedback_path.exists():
+        return {'repo': repo_path.name, 'criteria': {}, 'error': 'No feedback.json'}
+
+    # Also load the rubric so we know max scores (weights)
+    rubric_path = repo_path / '.github' / 'feedback' / 'rubric.yml'
+    rubric_weights = {}
+    if rubric_path.exists():
+        try:
+            with open(rubric_path) as f:
+                rubric = yaml.safe_load(f)
+            for c in rubric.get('criteria', []):
+                rubric_weights[c['name']] = c.get('weight', 0)
+        except Exception:
+            pass
+
+    try:
+        with open(feedback_path) as f:
+            feedback_data = json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return {'repo': repo_path.name, 'criteria': {}, 'error': 'Invalid feedback.json'}
+
+    criteria = {}
+    for item in feedback_data:
+        name = item.get('criterion', 'Unknown')
+        if not item.get('success', False):
+            criteria[name] = {'score': None, 'max': None, 'pct': None,
+                              'assessment': 'ERROR'}
+            continue
+
+        fb = item.get('feedback', {})
+        if isinstance(fb, str):
+            try:
+                fb = json.loads(fb)
+            except json.JSONDecodeError:
+                fb = {}
+
+        # Handle nested feedback dict
+        if 'feedback' in fb and isinstance(fb['feedback'], dict):
+            fb = fb['feedback']
+
+        assessment = (fb.get('overall_assessment')
+                      or fb.get('level')
+                      or fb.get('overall_evaluation', 'N/A'))
+        score = fb.get('score')
+        max_score = rubric_weights.get(name, 0)
+
+        pct = None
+        if score is not None and max_score > 0:
+            try:
+                pct = round(float(score) / max_score * 100, 1)
+            except (ValueError, TypeError):
+                pass
+
+        criteria[name] = {
+            'score': score,
+            'max': max_score,
+            'pct': pct,
+            'assessment': assessment,
+        }
+
+    return {'repo': repo_path.name, 'criteria': criteria}
+
+
+def build_summary_table(all_scores: list, output_dir: Path, scoring: bool = None):
+    """
+    Build and save a summary table from collected batch scores.
+
+    Args:
+        all_scores: list of dicts from extract_scores_from_feedback
+        output_dir: directory to write summary.md and summary.csv
+        scoring: True = show percentages, False = show rubric levels,
+                 None = auto-detect from data
+
+    Produces:
+      - summary.md  (markdown table)
+      - summary.csv (spreadsheet-friendly)
+
+    Prints the table to stdout as well.
+    """
+    if not all_scores:
+        print("No scores to summarize.")
+        return
+
+    # Collect all criterion names in order (from first successful repo)
+    criterion_names = []
+    for entry in all_scores:
+        if entry['criteria']:
+            criterion_names = list(entry['criteria'].keys())
+            break
+
+    if not criterion_names:
+        print("No criterion data found in any repo.")
+        return
+
+    # Determine display mode:
+    #   --scoring    -> percentages
+    #   --no-scoring -> rubric levels
+    #   neither      -> auto-detect from whether scores exist in the data
+    if scoring is True:
+        show_pct = True
+    elif scoring is False:
+        show_pct = False
+    else:
+        # Auto-detect: show percentages if any repo has numerical scores
+        show_pct = any(
+            entry['criteria'].get(cn, {}).get('score') is not None
+            for entry in all_scores
+            for cn in criterion_names
+        )
+
+    # Build header
+    if show_pct:
+        header = ['Repo'] + [f'{cn} (%)' for cn in criterion_names] + ['Overall (%)']
+    else:
+        header = ['Repo'] + criterion_names
+
+    # Build rows
+    rows = []
+    for entry in all_scores:
+        repo_name = entry['repo']
+        if entry.get('error'):
+            row = [repo_name] + [entry['error']] + [''] * (len(criterion_names) - 1)
+            if show_pct:
+                row.append('')
+            rows.append(row)
+            continue
+
+        row = [repo_name]
+        pcts = []
+        for cn in criterion_names:
+            info = entry['criteria'].get(cn, {})
+            if show_pct:
+                pct = info.get('pct')
+                if pct is not None:
+                    row.append(f'{pct}')
+                    pcts.append(pct)
+                else:
+                    # No numerical score available — show assessment as fallback
+                    row.append(info.get('assessment', 'N/A'))
+            else:
+                row.append(info.get('assessment', 'N/A'))
+
+        if show_pct:
+            if pcts:
+                overall = round(sum(pcts) / len(pcts), 1)
+                row.append(f'{overall}')
+            else:
+                row.append('N/A')
+
+        rows.append(row)
+
+    # Print to stdout
+    _print_markdown_table(header, rows)
+
+    # Save files
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Markdown
+    md_path = output_dir / 'summary.md'
+    with open(md_path, 'w') as f:
+        f.write(f'# Batch Feedback Summary\n\n')
+        f.write(f'Generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n\n')
+        _write_markdown_table(f, header, rows)
+    print(f"\nSummary table saved to: {md_path}")
+
+    # CSV
+    csv_path = output_dir / 'summary.csv'
+    with open(csv_path, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(header)
+        writer.writerows(rows)
+    print(f"CSV saved to: {csv_path}")
+
+
+def _print_markdown_table(header: list, rows: list):
+    """Print a markdown table to stdout with aligned columns."""
+    col_widths = [len(h) for h in header]
+    for row in rows:
+        for i, cell in enumerate(row):
+            if i < len(col_widths):
+                col_widths[i] = max(col_widths[i], len(str(cell)))
+
+    def fmt_row(cells):
+        return '| ' + ' | '.join(str(c).ljust(col_widths[i]) for i, c in enumerate(cells)) + ' |'
+
+    separator = '|' + '|'.join('-' * (w + 2) for w in col_widths) + '|'
+
+    print()
+    print(fmt_row(header))
+    print(separator)
+    for row in rows:
+        print(fmt_row(row))
+    print()
+
+
+def _write_markdown_table(f, header: list, rows: list):
+    """Write a markdown table to a file object."""
+    col_widths = [len(h) for h in header]
+    for row in rows:
+        for i, cell in enumerate(row):
+            if i < len(col_widths):
+                col_widths[i] = max(col_widths[i], len(str(cell)))
+
+    def fmt_row(cells):
+        return '| ' + ' | '.join(str(c).ljust(col_widths[i]) for i, c in enumerate(cells)) + ' |\n'
+
+    separator = '|' + '|'.join('-' * (w + 2) for w in col_widths) + '|\n'
+
+    f.write(fmt_row(header))
+    f.write(separator)
+    for row in rows:
+        f.write(fmt_row(row))
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -276,6 +519,13 @@ def main():
     parser.add_argument('--no-render', action='store_true',
                        help='Skip Quarto rendering (use existing output)')
 
+    # Scoring options
+    scoring_group = parser.add_mutually_exclusive_group()
+    scoring_group.add_argument('--scoring', action='store_true', default=None,
+                               help='Enable numerical scoring (overrides repo config)')
+    scoring_group.add_argument('--no-scoring', dest='scoring', action='store_false',
+                               help='Disable numerical scoring, show rubric levels (overrides repo config)')
+
     args = parser.parse_args()
 
     if args.init_config:
@@ -309,31 +559,39 @@ def main():
             print(f"Processing {len(repos)} repos...\n")
             successful = 0
             failed = 0
+            all_scores = []
 
             for repo in repos:
                 output_path = None
                 if args.output_dir:
-                    output_dir = Path(args.output_dir) / repo.name
-                    output_dir.mkdir(parents=True, exist_ok=True)
-                    output_path = output_dir / f'feedback.md'
+                    repo_output_dir = Path(args.output_dir) / repo.name
+                    repo_output_dir.mkdir(parents=True, exist_ok=True)
+                    output_path = repo_output_dir / f'feedback.md'
 
                 # Set up feedback config if needed
                 if not (repo / '.github' / 'feedback').exists():
                     print(f"\nSetting up feedback config for {repo.name}...")
                     setup_feedback_config(repo, instructor_repo, output_format='flat_file')
 
-                if run_feedback_pipeline(repo, output_path,
-                                        provider=args.provider, model=args.model,
-                                        use_docker=args.docker, skip_render=args.no_render,
-                                        docker_image=args.docker_image,
-                                        docker_quarto=args.docker_quarto):
+                result = run_feedback_pipeline(repo, output_path,
+                                               provider=args.provider, model=args.model,
+                                               use_docker=args.docker, skip_render=args.no_render,
+                                               docker_image=args.docker_image,
+                                               docker_quarto=args.docker_quarto,
+                                               scoring=args.scoring)
+                if result['success']:
                     successful += 1
                 else:
                     failed += 1
+                all_scores.append(result['scores'])
 
             print(f"\n{'='*60}")
             print(f"Summary: {successful} successful, {failed} failed out of {len(repos)}")
             print(f"{'='*60}")
+
+            # Build and save summary table
+            summary_dir = Path(args.output_dir) if args.output_dir else path
+            build_summary_table(all_scores, summary_dir, scoring=args.scoring)
             return
 
         print(f"Found {len(repos)} repos. Use --batch to process all, or --list to see them.")
@@ -351,12 +609,13 @@ def main():
         print(f"Setting up feedback config...")
         setup_feedback_config(path, instructor_repo, output_format='flat_file')
 
-    success = run_feedback_pipeline(path, output_path,
+    result = run_feedback_pipeline(path, output_path,
                                     provider=args.provider, model=args.model,
                                     use_docker=args.docker, skip_render=args.no_render,
                                     docker_image=args.docker_image,
-                                    docker_quarto=args.docker_quarto)
-    sys.exit(0 if success else 1)
+                                    docker_quarto=args.docker_quarto,
+                                    scoring=args.scoring)
+    sys.exit(0 if result['success'] else 1)
 
 if __name__ == '__main__':
     main()

@@ -40,7 +40,12 @@ def format_feedback_body(feedback_data: list, rubric_data: dict, config: dict) -
     rubric_criteria = {c['id']: c for c in rubric_data.get('criteria', [])}
 
     # Check if numerical scoring is enabled (defaults to false for formative assessment)
-    scoring_enabled = config.get('feedback', {}).get('scoring_enabled', False)
+    # Env var SCORING_ENABLED overrides config (for batch/local runs)
+    scoring_env = os.environ.get('SCORING_ENABLED')
+    if scoring_env is not None:
+        scoring_enabled = scoring_env.lower() in ('true', '1', 'yes')
+    else:
+        scoring_enabled = config.get('feedback', {}).get('scoring_enabled', False)
 
     for item in feedback_data:
         criterion_name = item.get('criterion', 'Unknown Criterion')
