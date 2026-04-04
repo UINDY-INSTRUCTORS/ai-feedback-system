@@ -49,6 +49,45 @@ def find_student_repos(parent_dir: Path) -> list:
             repos.append(item)
     return sorted(repos)
 
+
+def find_repos_from_pdf_dir(pdf_dir: Path, submissions_dir: Path) -> list:
+    """Find student repos in submissions_dir corresponding to PDFs in pdf_dir.
+
+    PDF filenames follow: {username}-{label}-{date}.pdf or {username}-{label}.pdf
+    where label == pdf_dir.name.
+
+    Repos in submissions_dir follow: {project-prefix}-{username}
+    """
+    label = pdf_dir.name
+    usernames = set()
+
+    for pdf_file in pdf_dir.glob('*.pdf'):
+        stem = pdf_file.stem  # e.g. "AlejandroMR-24-ph230-p4-chk-4.4-20260321"
+        idx = stem.find(f'-{label}')
+        if idx > 0:
+            usernames.add(stem[:idx])
+
+    if not usernames:
+        print(f"No PDFs matching label '{label}' found in {pdf_dir}")
+        return []
+
+    repos = []
+    found_names = set()
+    for item in sorted(submissions_dir.iterdir()):
+        if not item.is_dir():
+            continue
+        for username in usernames:
+            if item.name.endswith(f'-{username}') or item.name == username:
+                repos.append(item)
+                found_names.add(username)
+                break
+
+    missing = usernames - found_names
+    if missing:
+        print(f"Warning: no repos found for usernames: {', '.join(sorted(missing))}")
+
+    return repos
+
 def validate_repo(repo_path: Path) -> bool:
     """Check if repo has required files."""
     required_files = ['index.qmd']
@@ -487,7 +526,8 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__
     )
-    parser.add_argument('path', help='Path to student repo or parent directory of repos')
+    parser.add_argument('path', nargs='?',
+                       help='Path to student repo or parent directory of repos')
     parser.add_argument('--instructor-repo',
                        default='/Users/steve/Development/quarto_reports/ai-feedback-system',
                        help='Path to instructor repo with rubric/guidance (default: ai-feedback-system)')
@@ -499,6 +539,8 @@ def main():
                        help='List available repos and exit')
     parser.add_argument('--batch', action='store_true',
                        help='Process all repos in directory')
+    parser.add_argument('--from-pdf-dir',
+                       help='Process repos that produced PDFs in this directory (path = submissions dir)')
 
     # Provider options
     parser.add_argument('--provider',
@@ -532,6 +574,79 @@ def main():
         from dot_github_folder.scripts.ai_provider import create_default_global_config
         create_default_global_config()
         return
+
+    # --from-pdf-dir: find repos that produced PDFs in the given directory
+    if args.from_pdf_dir:
+        if not args.path:
+            print("❌ A submissions directory (path) is required with --from-pdf-dir")
+            sys.exit(1)
+        pdf_dir = Path(args.from_pdf_dir).resolve()
+        submissions_dir = Path(args.path).resolve()
+        if not pdf_dir.exists():
+            print(f"❌ PDF directory not found: {pdf_dir}")
+            sys.exit(1)
+        if not submissions_dir.exists():
+            print(f"❌ Submissions directory not found: {submissions_dir}")
+            sys.exit(1)
+
+
+        instructor_repo = Path(args.instructor_repo).resolve()
+        if not instructor_repo.exists():
+            print(f"❌ Instructor repo not found: {instructor_repo}")
+            sys.exit(1)
+
+        repos = find_repos_from_pdf_dir(pdf_dir, submissions_dir)
+        if not repos:
+            print("No matching repos found.")
+            sys.exit(1)
+
+        if args.list:
+            print(f"Found {len(repos)} repos for PDFs in {pdf_dir}:")
+            for repo in repos:
+                status = "✓" if validate_repo(repo) else "✗"
+                print(f"  {status} {repo.name}")
+            return
+
+        print(f"Processing {len(repos)} repos from {pdf_dir.name}...\n")
+        successful = 0
+        failed = 0
+        all_scores = []
+
+        for repo in repos:
+            output_path = None
+            if args.output_dir:
+                repo_output_dir = Path(args.output_dir) / repo.name
+                repo_output_dir.mkdir(parents=True, exist_ok=True)
+                output_path = repo_output_dir / 'feedback.md'
+
+            if not (repo / '.github' / 'feedback').exists():
+                print(f"\nSetting up feedback config for {repo.name}...")
+                setup_feedback_config(repo, instructor_repo, output_format='flat_file')
+
+            result = run_feedback_pipeline(repo, output_path,
+                                           provider=args.provider, model=args.model,
+                                           use_docker=args.docker, skip_render=args.no_render,
+                                           docker_image=args.docker_image,
+                                           docker_quarto=args.docker_quarto,
+                                           scoring=args.scoring)
+            if result and result.get('success'):
+                successful += 1
+            else:
+                failed += 1
+            if result:
+                all_scores.append(result['scores'])
+
+        print(f"\n{'='*60}")
+        print(f"Summary: {successful} successful, {failed} failed out of {len(repos)}")
+        print(f"{'='*60}")
+
+        summary_dir = Path(args.output_dir) if args.output_dir else pdf_dir
+        build_summary_table(all_scores, summary_dir, scoring=args.scoring)
+        return
+
+    if not args.path:
+        print("❌ A path argument or --from-pdf-dir is required.")
+        sys.exit(1)
 
     path = Path(args.path).resolve()
     instructor_repo = Path(args.instructor_repo).resolve()
