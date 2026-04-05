@@ -444,19 +444,19 @@ def call_extraction_api(prompt: str, model: str, max_retries: int = 3) -> str:
         {"role": "user", "content": prompt}
     ]
 
-    # Resolve provider, using the extractor model
     provider_config = resolve_provider_config()
-    # Override model with the extractor-specific model
+    extractor_model = provider_config['extractor']
     extraction_config = {
         'max_output_tokens': 4000,
-        'request_timeout': 90,
+        'request_timeout': 120,
     }
 
     text, result, payload = call_ai(
-        messages, model, extraction_config,
+        messages, extractor_model, extraction_config,
         provider_config=provider_config,
         json_mode=False,
         max_retries=max_retries,
+        fallback_model=provider_config.get('extractor_fallback'),
     )
     return text.strip()
 

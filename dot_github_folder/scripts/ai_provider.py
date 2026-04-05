@@ -20,6 +20,7 @@ Configuration priority:
 
 import os
 import json
+import random
 import sys
 import time
 import yaml
@@ -80,7 +81,8 @@ def create_default_global_config():
     GLOBAL_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
     default_config = """# AI Feedback System - Global Configuration
 # This file sets defaults for local feedback runs.
-# Per-repo .github/config.yml and environment variables take precedence.
+# Environment variables take precedence over this file, and this file
+# takes precedence over per-repo .github/config.yml.
 
 # AI Provider: github_models, openrouter, anthropic, gemini, openai
 provider: github_models
@@ -169,7 +171,13 @@ def resolve_provider_config(repo_config: dict = None) -> dict:
         os.environ.get('AI_EXTRACTOR_MODEL')
         or global_model.get('extractor')
         or repo_model.get('extractor')
-        or 'gpt-4o-mini' if provider == 'github_models' else model
+        or ('gpt-4o-mini' if provider == 'github_models' else model)
+    )
+    extractor_fallback = (
+        os.environ.get('AI_EXTRACTOR_FALLBACK_MODEL')
+        or global_model.get('extractor_fallback')
+        or repo_model.get('extractor_fallback')
+        or fallback
     )
 
     # API key
@@ -192,6 +200,7 @@ def resolve_provider_config(repo_config: dict = None) -> dict:
         'model': model,
         'fallback': fallback,
         'extractor': extractor,
+        'extractor_fallback': extractor_fallback,
         'api_key': api_key,
         'api_base': api_base,
     }
@@ -206,6 +215,7 @@ def _call_openai_compatible(
     json_mode: bool = True,
     max_retries: int = 3,
     extra_headers: dict = None,
+    session_id: str = None,
 ) -> Tuple[str, dict, dict]:
     """
     Call an OpenAI-compatible chat completions endpoint.
@@ -227,6 +237,8 @@ def _call_openai_compatible(
     }
     if json_mode:
         payload["response_format"] = {"type": "json_object"}
+    if session_id:
+        payload["session_id"] = session_id
 
     timeout = config.get('request_timeout', 120)
     last_error = None
@@ -238,7 +250,8 @@ def _call_openai_compatible(
             response.raise_for_status()
 
             result = response.json()
-            text = result['choices'][0]['message']['content']
+            msg = result['choices'][0]['message']
+            text = msg.get('content') or msg.get('reasoning') or ''
 
             usage = result.get('usage', {})
             print(f"   Tokens: {usage.get('total_tokens', 0)} "
@@ -252,8 +265,11 @@ def _call_openai_compatible(
             status = e.response.status_code
             if status == 429 and attempt < max_retries - 1:
                 retry_after = e.response.headers.get('Retry-After')
-                wait = int(retry_after) if retry_after and retry_after.isdigit() else 2 ** attempt
-                print(f"   Rate limited (429). Waiting {wait}s...")
+                if retry_after and retry_after.isdigit():
+                    wait = int(retry_after) + random.uniform(0, 2)
+                else:
+                    wait = random.uniform(0, 2 ** (attempt + 1))
+                print(f"   Rate limited (429). Waiting {wait:.1f}s...")
                 time.sleep(wait)
                 continue
             elif status == 413 and attempt < max_retries - 1:
@@ -265,6 +281,11 @@ def _call_openai_compatible(
                     print(f"   Payload too large (413). Retrying without images...")
                     continue
                 raise
+            elif status == 400 and 'response_format' in payload and attempt < max_retries - 1:
+                # Some models (e.g. Gemma via OpenRouter) don't support response_format
+                del payload['response_format']
+                print(f"   Bad request (400). Retrying without response_format...")
+                continue
             else:
                 raise
 
@@ -523,17 +544,19 @@ def call_ai(
     provider_config: dict = None,
     json_mode: bool = True,
     max_retries: int = 3,
+    fallback_model: str = None,
 ) -> Tuple[str, dict, dict]:
     """
     Unified AI call interface. Routes to the correct provider.
 
     Args:
         messages: OpenAI-format messages list
-        model: Model name (can be overridden by provider_config)
+        model: Model name
         config: Repo config dict
         provider_config: Output of resolve_provider_config() (resolved if None)
         json_mode: Request JSON response format
         max_retries: Number of retries on rate limit
+        fallback_model: Model to try if primary exhausts all retries
 
     Returns:
         (response_text, response_data, request_payload)
@@ -552,30 +575,42 @@ def call_ai(
             f"Set {key_var} environment variable, or add api_key to ~/.ai-feedback/config.yml"
         )
 
-    if provider in ('github_models', 'openrouter', 'openai'):
-        extra_headers = {}
-        if provider == 'openrouter':
-            extra_headers = {
-                "HTTP-Referer": "https://github.com/UINDY-INSTRUCTORS/ai-feedback-system",
-                "X-Title": "AI Feedback System",
-            }
-        return _call_openai_compatible(
-            messages, model, api_key, api_base, config,
-            json_mode=json_mode, max_retries=max_retries,
-            extra_headers=extra_headers if extra_headers else None,
-        )
-    elif provider == 'anthropic':
-        return _call_anthropic(
-            messages, model, api_key, api_base, config,
-            json_mode=json_mode, max_retries=max_retries,
-        )
-    elif provider == 'gemini':
-        return _call_gemini(
-            messages, model, api_key, api_base, config,
-            json_mode=json_mode, max_retries=max_retries,
-        )
-    else:
-        raise ValueError(f"Unknown provider: {provider}. Supported: {', '.join(PROVIDER_ENDPOINTS.keys())}")
+    session_id = os.environ.get('AI_SESSION_ID') or None
+
+    def _call(m):
+        if provider in ('github_models', 'openrouter', 'openai'):
+            extra_headers = {}
+            if provider == 'openrouter':
+                extra_headers = {
+                    "HTTP-Referer": "https://github.com/UINDY-INSTRUCTORS/ai-feedback-system",
+                    "X-Title": "AI Feedback System",
+                }
+            return _call_openai_compatible(
+                messages, m, api_key, api_base, config,
+                json_mode=json_mode, max_retries=max_retries,
+                extra_headers=extra_headers if extra_headers else None,
+                session_id=session_id,
+            )
+        elif provider == 'anthropic':
+            return _call_anthropic(
+                messages, m, api_key, api_base, config,
+                json_mode=json_mode, max_retries=max_retries,
+            )
+        elif provider == 'gemini':
+            return _call_gemini(
+                messages, m, api_key, api_base, config,
+                json_mode=json_mode, max_retries=max_retries,
+            )
+        else:
+            raise ValueError(f"Unknown provider: {provider}. Supported: {', '.join(PROVIDER_ENDPOINTS.keys())}")
+
+    try:
+        return _call(model)
+    except Exception as e:
+        if fallback_model and fallback_model != model:
+            print(f"   Primary model failed ({e}). Trying fallback: {fallback_model}")
+            return _call(fallback_model)
+        raise
 
 
 def print_provider_info(provider_config: dict):

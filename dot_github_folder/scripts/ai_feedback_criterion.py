@@ -383,6 +383,7 @@ def analyze_criterion(report: dict, criterion: dict, guidance: str, config: dict
             messages, model, config,
             provider_config=provider_config,
             json_mode=True,
+            fallback_model=provider_config.get('fallback'),
         )
         end_time = datetime.now().timestamp()
 
@@ -411,7 +412,12 @@ def analyze_criterion(report: dict, criterion: dict, guidance: str, config: dict
         })
 
         # The actual feedback content is inside the JSON now
-        feedback_content = json.loads(feedback_json)
+        # Strip markdown fences if the model wrapped its response (e.g. ```json ... ```)
+        json_text = feedback_json.strip()
+        if json_text.startswith('```'):
+            lines = json_text.splitlines()
+            json_text = '\n'.join(lines[1:-1] if lines[-1].strip().startswith('```') else lines[1:])
+        feedback_content = json.loads(json_text)
 
         save_debug_criterion_data(metadata, context, prompt, request_payload, response_data, feedback_json)
 

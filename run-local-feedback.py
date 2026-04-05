@@ -179,6 +179,8 @@ def run_feedback_pipeline(repo_path: Path, output_path: Path = None,
         or False on validation failure.
     """
     repo_path = Path(repo_path).resolve()
+    if output_path is not None:
+        output_path = Path(output_path).resolve()
 
     if not validate_repo(repo_path):
         return {'success': False, 'scores': {'repo': repo_path.name, 'criteria': {}, 'error': 'Validation failed'}}
@@ -252,7 +254,7 @@ def run_feedback_pipeline(repo_path: Path, output_path: Path = None,
         print("\n4️⃣  Generating AI feedback...")
         result = subprocess.run(
             [sys.executable, str(SCRIPT_DIR / 'ai_feedback_criterion.py')],
-            capture_output=True, text=True, env=env, timeout=600
+            capture_output=True, text=True, env=env, timeout=1800
         )
         if result.returncode != 0:
             print(f"❌ Feedback generation failed:\n{result.stderr}")
@@ -529,8 +531,7 @@ def main():
     parser.add_argument('path', nargs='?',
                        help='Path to student repo or parent directory of repos')
     parser.add_argument('--instructor-repo',
-                       default='/Users/steve/Development/quarto_reports/ai-feedback-system',
-                       help='Path to instructor repo with rubric/guidance (default: ai-feedback-system)')
+                       help='Path to instructor repo with rubric/guidance (overrides student repo config)')
     parser.add_argument('--output-dir',
                        help='Directory to save feedback files (defaults to repo/.github)')
     parser.add_argument('--config',
@@ -590,10 +591,12 @@ def main():
             sys.exit(1)
 
 
-        instructor_repo = Path(args.instructor_repo).resolve()
-        if not instructor_repo.exists():
-            print(f"❌ Instructor repo not found: {instructor_repo}")
-            sys.exit(1)
+        instructor_repo = None
+        if args.instructor_repo:
+            instructor_repo = Path(args.instructor_repo).resolve()
+            if not instructor_repo.exists():
+                print(f"❌ Instructor repo not found: {instructor_repo}")
+                sys.exit(1)
 
         repos = find_repos_from_pdf_dir(pdf_dir, submissions_dir)
         if not repos:
@@ -619,8 +622,7 @@ def main():
                 repo_output_dir.mkdir(parents=True, exist_ok=True)
                 output_path = repo_output_dir / 'feedback.md'
 
-            if not (repo / '.github' / 'feedback').exists():
-                print(f"\nSetting up feedback config for {repo.name}...")
+            if instructor_repo:
                 setup_feedback_config(repo, instructor_repo, output_format='flat_file')
 
             result = run_feedback_pipeline(repo, output_path,
@@ -649,11 +651,12 @@ def main():
         sys.exit(1)
 
     path = Path(args.path).resolve()
-    instructor_repo = Path(args.instructor_repo).resolve()
-
-    if not instructor_repo.exists():
-        print(f"❌ Instructor repo not found: {instructor_repo}")
-        sys.exit(1)
+    instructor_repo = None
+    if args.instructor_repo:
+        instructor_repo = Path(args.instructor_repo).resolve()
+        if not instructor_repo.exists():
+            print(f"❌ Instructor repo not found: {instructor_repo}")
+            sys.exit(1)
 
     if not path.exists():
         print(f"❌ Path not found: {path}")
@@ -683,9 +686,8 @@ def main():
                     repo_output_dir.mkdir(parents=True, exist_ok=True)
                     output_path = repo_output_dir / f'feedback.md'
 
-                # Set up feedback config if needed
-                if not (repo / '.github' / 'feedback').exists():
-                    print(f"\nSetting up feedback config for {repo.name}...")
+                # Override feedback config from instructor repo if specified
+                if instructor_repo:
                     setup_feedback_config(repo, instructor_repo, output_format='flat_file')
 
                 result = run_feedback_pipeline(repo, output_path,
@@ -719,9 +721,8 @@ def main():
         output_dir.mkdir(parents=True, exist_ok=True)
         output_path = output_dir / 'feedback.md'
 
-    # Set up feedback config if needed
-    if not (path / '.github' / 'feedback').exists():
-        print(f"Setting up feedback config...")
+    # Override feedback config from instructor repo if specified
+    if instructor_repo:
         setup_feedback_config(path, instructor_repo, output_format='flat_file')
 
     result = run_feedback_pipeline(path, output_path,
