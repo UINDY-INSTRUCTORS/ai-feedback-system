@@ -171,7 +171,7 @@ def run_feedback_pipeline(repo_path: Path, output_path: Path = None,
                           provider: str = None, model: str = None,
                           use_docker: bool = False, skip_render: bool = False,
                           docker_image: str = None, docker_quarto: str = None,
-                          scoring: bool = None):
+                          scoring: bool = None, disable_json_mode: bool = False):
     """Run the complete feedback pipeline for a repo.
 
     Returns:
@@ -206,6 +206,8 @@ def run_feedback_pipeline(repo_path: Path, output_path: Path = None,
             env['AI_PROVIDER'] = provider
         if model:
             env['AI_MODEL'] = model
+        if disable_json_mode:
+            env['AI_DISABLE_JSON_MODE'] = 'true'
         if scoring is not None:
             env['SCORING_ENABLED'] = 'true' if scoring else 'false'
 
@@ -549,6 +551,8 @@ def main():
                        help='AI provider (overrides global/repo config)')
     parser.add_argument('--model',
                        help='Model name (overrides global/repo config)')
+    parser.add_argument('--disable-json-mode', action='store_true',
+                       help='Skip JSON response format (for models that don\'t support it)')
     parser.add_argument('--init-config', action='store_true',
                        help='Create default global config at ~/.ai-feedback/config.yml and exit')
 
@@ -569,11 +573,32 @@ def main():
     scoring_group.add_argument('--no-scoring', dest='scoring', action='store_false',
                                help='Disable numerical scoring, show rubric levels (overrides repo config)')
 
+    # Model listing
+    parser.add_argument('--list-models', nargs='?', const='http://localhost:1234/v1',
+                       help='Query an OpenAI-compatible endpoint for available models '
+                            '(default: http://localhost:1234/v1 for LM Studio)')
+
     args = parser.parse_args()
 
     if args.init_config:
         from dot_github_folder.scripts.ai_provider import create_default_global_config
         create_default_global_config()
+        return
+
+    if args.list_models:
+        from dot_github_folder.scripts.ai_provider import list_openai_compatible_models
+        try:
+            models = list_openai_compatible_models(args.list_models)
+            if models:
+                print(f"\nAvailable models from {args.list_models}:\n")
+                for model in models:
+                    print(f"  {model}")
+                print()
+            else:
+                print("No models found.")
+        except Exception as e:
+            print(f"❌ Error: {e}", file=sys.stderr)
+            sys.exit(1)
         return
 
     # --from-pdf-dir: find repos that produced PDFs in the given directory
@@ -630,7 +655,8 @@ def main():
                                            use_docker=args.docker, skip_render=args.no_render,
                                            docker_image=args.docker_image,
                                            docker_quarto=args.docker_quarto,
-                                           scoring=args.scoring)
+                                           scoring=args.scoring,
+                                           disable_json_mode=args.disable_json_mode)
             if result and result.get('success'):
                 successful += 1
             else:
@@ -695,7 +721,8 @@ def main():
                                                use_docker=args.docker, skip_render=args.no_render,
                                                docker_image=args.docker_image,
                                                docker_quarto=args.docker_quarto,
-                                               scoring=args.scoring)
+                                               scoring=args.scoring,
+                                               disable_json_mode=args.disable_json_mode)
                 if result['success']:
                     successful += 1
                 else:
@@ -730,7 +757,8 @@ def main():
                                     use_docker=args.docker, skip_render=args.no_render,
                                     docker_image=args.docker_image,
                                     docker_quarto=args.docker_quarto,
-                                    scoring=args.scoring)
+                                    scoring=args.scoring,
+                                    disable_json_mode=args.disable_json_mode)
     sys.exit(0 if result['success'] else 1)
 
 if __name__ == '__main__':

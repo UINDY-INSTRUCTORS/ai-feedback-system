@@ -97,6 +97,10 @@ provider: github_models
 # Environment variables always take precedence.
 # api_key: your-key-here
 
+# Disable JSON mode (response_format: json_object) for models that don't support it
+# Set to true to skip JSON mode and avoid retries on 400 errors
+# disable_json_mode: false
+
 # Provider-specific examples:
 #
 # --- OpenRouter ---
@@ -195,6 +199,13 @@ def resolve_provider_config(repo_config: dict = None) -> dict:
         or PROVIDER_ENDPOINTS.get(provider)
     )
 
+    # Disable JSON mode for models that don't support it
+    disable_json_mode = (
+        os.environ.get('AI_DISABLE_JSON_MODE', '').lower() in ('true', '1', 'yes')
+        or global_config.get('disable_json_mode', False)
+        or repo_config.get('disable_json_mode', False)
+    )
+
     return {
         'provider': provider,
         'model': model,
@@ -203,6 +214,7 @@ def resolve_provider_config(repo_config: dict = None) -> dict:
         'extractor_fallback': extractor_fallback,
         'api_key': api_key,
         'api_base': api_base,
+        'disable_json_mode': disable_json_mode,
     }
 
 
@@ -216,6 +228,7 @@ def _call_openai_compatible(
     max_retries: int = 3,
     extra_headers: dict = None,
     session_id: str = None,
+    disable_json_mode: bool = False,
 ) -> Tuple[str, dict, dict]:
     """
     Call an OpenAI-compatible chat completions endpoint.
@@ -235,7 +248,7 @@ def _call_openai_compatible(
         "temperature": 0.3,
         "max_tokens": config.get('max_output_tokens', 2000),
     }
-    if json_mode:
+    if json_mode and not disable_json_mode:
         payload["response_format"] = {"type": "json_object"}
     if session_id:
         payload["session_id"] = session_id
@@ -576,6 +589,7 @@ def call_ai(
         )
 
     session_id = os.environ.get('AI_SESSION_ID') or None
+    disable_json_mode = provider_config.get('disable_json_mode', False)
 
     def _call(m):
         if provider in ('github_models', 'openrouter', 'openai'):
@@ -590,6 +604,7 @@ def call_ai(
                 json_mode=json_mode, max_retries=max_retries,
                 extra_headers=extra_headers if extra_headers else None,
                 session_id=session_id,
+                disable_json_mode=disable_json_mode,
             )
         elif provider == 'anthropic':
             return _call_anthropic(
@@ -620,3 +635,37 @@ def print_provider_info(provider_config: dict):
     print(f"   Base URL: {provider_config['api_base']}")
     has_key = "set" if provider_config['api_key'] else "MISSING"
     print(f"   API Key:  {has_key}")
+
+
+def list_openai_compatible_models(api_base: str, api_key: str = None, timeout: int = 10) -> List[str]:
+    """
+    Query an OpenAI-compatible endpoint for available models.
+    Works with LM Studio, OpenRouter, OpenAI, etc.
+
+    Args:
+        api_base: The base URL (e.g., http://localhost:1234/v1)
+        api_key: Optional API key (some providers require it)
+        timeout: Request timeout in seconds
+
+    Returns:
+        List of model identifiers, sorted
+    """
+    endpoint = f"{api_base}/models"
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    try:
+        print(f"Querying {endpoint}...")
+        response = requests.get(endpoint, headers=headers, timeout=timeout)
+        response.raise_for_status()
+
+        result = response.json()
+        models = [m['id'] for m in result.get('data', [])]
+        return sorted(models)
+
+    except requests.exceptions.RequestException as e:
+        raise RuntimeError(
+            f"Failed to query models from {api_base}: {e}\n"
+            f"Make sure LM Studio is running locally (default: http://localhost:1234/v1)"
+        )

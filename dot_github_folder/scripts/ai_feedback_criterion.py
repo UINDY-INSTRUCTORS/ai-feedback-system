@@ -115,7 +115,8 @@ def save_debug_criterion_data(
     if DEBUG_CONFIG.get('save_responses', False) and response_data:
         (criterion_dir / "response.json").write_text(json.dumps(response_data, indent=2))
     if DEBUG_CONFIG.get('save_responses', False) and feedback:
-        (criterion_dir / "feedback.md").write_text(feedback)
+        # Save raw feedback text (the model's response before JSON parsing)
+        (criterion_dir / "response_raw.txt").write_text(feedback)
     if DEBUG_CONFIG.get('save_api_metadata', False):
         (criterion_dir / "metadata.json").write_text(json.dumps(metadata, indent=2))
 
@@ -417,9 +418,31 @@ def analyze_criterion(report: dict, criterion: dict, guidance: str, config: dict
         if json_text.startswith('```'):
             lines = json_text.splitlines()
             json_text = '\n'.join(lines[1:-1] if lines[-1].strip().startswith('```') else lines[1:])
-        feedback_content = json.loads(json_text)
 
+        # Save raw response before parsing (for debugging)
         save_debug_criterion_data(metadata, context, prompt, request_payload, response_data, feedback_json)
+
+        # Try to parse JSON, with fallback for unescaped backslashes
+        try:
+            feedback_content = json.loads(json_text)
+        except json.JSONDecodeError as e:
+            # If we have an invalid escape error, try to fix common patterns
+            # (e.g., unescaped backslashes from file paths or LaTeX)
+            if "Invalid \\escape" in str(e) or "invalid escape sequence" in str(e):
+                # Escape unescaped backslashes (but not already-escaped ones)
+                fixed_json = json_text.replace('\\', '\\\\')
+                # But that will double-escape already-escaped sequences, so undo those
+                fixed_json = fixed_json.replace('\\\\\\\\', '\\\\')  # \\\\ -> \\
+                fixed_json = fixed_json.replace('\\\\"', '\\"')      # \\" -> \"
+                fixed_json = fixed_json.replace('\\\\/', '\\/')      # \/ -> /
+                fixed_json = fixed_json.replace('\\\\n', '\\n')      # \n -> \n
+                fixed_json = fixed_json.replace('\\\\t', '\\t')      # \t -> \t
+                try:
+                    feedback_content = json.loads(fixed_json)
+                except json.JSONDecodeError:
+                    raise e  # Re-raise original error if fixing didn't work
+            else:
+                raise
 
         return {
             'criterion': criterion_name,
@@ -431,7 +454,8 @@ def analyze_criterion(report: dict, criterion: dict, guidance: str, config: dict
     except Exception as e:
         print(f"   Failed: {e}")
         metadata["error"] = str(e)
-        save_debug_criterion_data(metadata, context, prompt)
+        # Save what we have for debugging (including raw response if available)
+        save_debug_criterion_data(metadata, context, prompt, request_payload, response_data, feedback_json if 'feedback_json' in locals() else "")
         return {
             'criterion': criterion_name,
             'feedback': f"Error analyzing this criterion: {e}",
