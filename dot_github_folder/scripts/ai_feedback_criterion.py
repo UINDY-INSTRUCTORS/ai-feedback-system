@@ -455,7 +455,10 @@ def analyze_criterion(report: dict, criterion: dict, guidance: str, config: dict
         print(f"   Failed: {e}")
         metadata["error"] = str(e)
         # Save what we have for debugging (including raw response if available)
-        save_debug_criterion_data(metadata, context, prompt, request_payload, response_data, feedback_json if 'feedback_json' in locals() else "")
+        save_debug_criterion_data(metadata, context, prompt,
+                                  request_payload if 'request_payload' in locals() else {},
+                                  response_data if 'response_data' in locals() else {},
+                                  feedback_json if 'feedback_json' in locals() else "")
         return {
             'criterion': criterion_name,
             'feedback': f"Error analyzing this criterion: {e}",

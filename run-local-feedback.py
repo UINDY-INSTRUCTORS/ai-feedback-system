@@ -223,7 +223,7 @@ def run_feedback_pipeline(repo_path: Path, output_path: Path = None,
         )
         if result.returncode != 0:
             print(f"Validation failed:\n{result.stderr}")
-            return False
+            return {'success': False, 'scores': {'repo': repo_path.name, 'criteria': {}, 'error': 'Validation failed'}}
         print("✓ Configuration valid")
 
         # Step 2: Render Quarto report
@@ -249,7 +249,7 @@ def run_feedback_pipeline(repo_path: Path, output_path: Path = None,
         )
         if result.returncode != 0:
             print(f"❌ Parse failed:\n{result.stderr}")
-            return False
+            return {'success': False, 'scores': {'repo': repo_path.name, 'criteria': {}, 'error': 'Parse failed'}}
         print("✓ Report parsed")
 
         # Step 4: Generate AI feedback
@@ -260,7 +260,7 @@ def run_feedback_pipeline(repo_path: Path, output_path: Path = None,
         )
         if result.returncode != 0:
             print(f"❌ Feedback generation failed:\n{result.stderr}")
-            return False
+            return {'success': False, 'scores': {'repo': repo_path.name, 'criteria': {}, 'error': 'Feedback generation failed'}}
         if result.stdout:
             print(result.stdout)
         print("✓ Feedback generated")
@@ -273,7 +273,7 @@ def run_feedback_pipeline(repo_path: Path, output_path: Path = None,
         )
         if result.returncode != 0:
             print(f"❌ Save failed:\n{result.stderr}")
-            return False
+            return {'success': False, 'scores': {'repo': repo_path.name, 'criteria': {}, 'error': 'Save failed'}}
         if result.stdout:
             print(result.stdout)
         print("✓ Feedback saved")

@@ -253,7 +253,7 @@ def _call_openai_compatible(
     if session_id:
         payload["session_id"] = session_id
 
-    timeout = config.get('request_timeout', 120)
+    timeout = config.get('request_timeout', 240)
     last_error = None
 
     for attempt in range(max_retries):
@@ -344,7 +344,7 @@ def _call_anthropic(
     if system_text:
         payload["system"] = system_text
 
-    timeout = config.get('request_timeout', 120)
+    timeout = config.get('request_timeout', 240)
     last_error = None
 
     for attempt in range(max_retries):
@@ -426,7 +426,7 @@ def _call_gemini(
     if json_mode:
         payload["generationConfig"]["responseMimeType"] = "application/json"
 
-    timeout = config.get('request_timeout', 120)
+    timeout = config.get('request_timeout', 240)
     last_error = None
 
     for attempt in range(max_retries):
