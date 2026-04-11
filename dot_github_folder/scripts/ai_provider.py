@@ -248,7 +248,8 @@ def _call_openai_compatible(
         "temperature": 0.3,
         "max_tokens": config.get('max_output_tokens', 2000),
     }
-    if json_mode and not disable_json_mode:
+    is_local = 'localhost' in api_base or '127.0.0.1' in api_base
+    if json_mode and not disable_json_mode and not is_local:
         payload["response_format"] = {"type": "json_object"}
     if session_id:
         payload["session_id"] = session_id
