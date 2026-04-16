@@ -68,6 +68,7 @@ def extract_sections_for_criterion_ai(
     else:
         try:
             prompt = build_extraction_prompt(report, criterion)
+            print(f"   Extracting relevant sections...")
             extracted_text = call_extraction_api(prompt, model)
         except Exception as e:
             print(f"WARNING: AI text extraction failed for {criterion['name']}: {e}", file=sys.stderr)

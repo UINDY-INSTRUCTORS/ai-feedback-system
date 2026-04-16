@@ -140,8 +140,37 @@ def setup_feedback_config(repo_path: Path, instructor_path: Path, output_format:
 
     return feedback_dir
 
+def _run_subprocess(cmd, env=None, timeout=120, verbose=False):
+    """Run a subprocess. In verbose mode, stream stdout+stderr live; otherwise capture."""
+    if verbose:
+        verbose_env = dict(env) if env else os.environ.copy()
+        verbose_env['PYTHONUNBUFFERED'] = '1'
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            env=verbose_env,
+        )
+        stdout_lines = []
+        for line in proc.stdout:
+            print(line, end='', flush=True)
+            stdout_lines.append(line)
+        proc.wait()
+
+        class _Result:
+            def __init__(self, returncode, stdout):
+                self.returncode = returncode
+                self.stdout = stdout
+                self.stderr = ''
+        return _Result(proc.returncode, ''.join(stdout_lines))
+    else:
+        return subprocess.run(cmd, capture_output=True, text=True, env=env, timeout=timeout)
+
+
 def render_quarto_docker(repo_path: Path, docker_image: str = None,
-                         docker_quarto: str = None, docker_home: str = 'dhome'):
+                         docker_quarto: str = None, docker_home: str = 'dhome',
+                         verbose: bool = False):
     """Render Quarto report using Docker container matching the codespace environment."""
     image = docker_image or DOCKER_IMAGE
     quarto = docker_quarto or DOCKER_QUARTO
@@ -156,22 +185,20 @@ def render_quarto_docker(repo_path: Path, docker_image: str = None,
     ]
     print(f"   Docker: {image}")
     print(f"   Quarto: {quarto}")
-    return subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+    return _run_subprocess(cmd, timeout=180, verbose=verbose)
 
 
-def render_quarto_local(repo_path: Path, env: dict):
+def render_quarto_local(repo_path: Path, env: dict, verbose: bool = False):
     """Render Quarto report using locally installed quarto."""
-    return subprocess.run(
-        ['quarto', 'render'],
-        capture_output=True, text=True, env=env, timeout=120
-    )
+    return _run_subprocess(['quarto', 'render'], env=env, timeout=120, verbose=verbose)
 
 
 def run_feedback_pipeline(repo_path: Path, output_path: Path = None,
                           provider: str = None, model: str = None,
                           use_docker: bool = False, skip_render: bool = False,
                           docker_image: str = None, docker_quarto: str = None,
-                          scoring: bool = None, disable_json_mode: bool = False):
+                          scoring: bool = None, disable_json_mode: bool = False,
+                          verbose: bool = False):
     """Run the complete feedback pipeline for a repo.
 
     Returns:
@@ -217,12 +244,13 @@ def run_feedback_pipeline(repo_path: Path, output_path: Path = None,
 
         # Step 1: Validate feedback configuration
         print("\n1  Validating feedback configuration...")
-        result = subprocess.run(
+        result = _run_subprocess(
             [sys.executable, str(SCRIPT_DIR / 'validate_feedback_setup.py')],
-            capture_output=True, text=True, env=env
+            env=env, verbose=verbose
         )
         if result.returncode != 0:
-            print(f"Validation failed:\n{result.stderr}")
+            if not verbose:
+                print(f"Validation failed:\n{result.stderr}")
             return {'success': False, 'scores': {'repo': repo_path.name, 'criteria': {}, 'error': 'Validation failed'}}
         print("✓ Configuration valid")
 
@@ -232,49 +260,55 @@ def run_feedback_pipeline(repo_path: Path, output_path: Path = None,
         else:
             print("\n2  Rendering Quarto report...")
             if use_docker:
-                result = render_quarto_docker(repo_path, docker_image, docker_quarto)
+                result = render_quarto_docker(repo_path, docker_image, docker_quarto, verbose=verbose)
             else:
-                result = render_quarto_local(repo_path, env)
+                result = render_quarto_local(repo_path, env, verbose=verbose)
 
             if result.returncode != 0:
-                print(f"Quarto render had issues (continuing):\n{result.stderr[:500]}")
+                if not verbose:
+                    print(f"Quarto render had issues (continuing):\n{result.stderr[:500]}")
+                else:
+                    print("⚠️  Quarto render had issues (continuing)")
             else:
                 print("✓ Report rendered")
 
         # Step 3: Parse report
         print("\n3️⃣  Parsing report...")
-        result = subprocess.run(
+        result = _run_subprocess(
             [sys.executable, str(SCRIPT_DIR / 'parse_report.py')],
-            capture_output=True, text=True, env=env
+            env=env, verbose=verbose
         )
         if result.returncode != 0:
-            print(f"❌ Parse failed:\n{result.stderr}")
+            if not verbose:
+                print(f"❌ Parse failed:\n{result.stderr}")
             return {'success': False, 'scores': {'repo': repo_path.name, 'criteria': {}, 'error': 'Parse failed'}}
         print("✓ Report parsed")
 
         # Step 4: Generate AI feedback
         print("\n4️⃣  Generating AI feedback...")
-        result = subprocess.run(
+        result = _run_subprocess(
             [sys.executable, str(SCRIPT_DIR / 'ai_feedback_criterion.py')],
-            capture_output=True, text=True, env=env, timeout=1800
+            env=env, timeout=1800, verbose=verbose
         )
         if result.returncode != 0:
-            print(f"❌ Feedback generation failed:\n{result.stderr}")
+            if not verbose:
+                print(f"❌ Feedback generation failed:\n{result.stderr}")
             return {'success': False, 'scores': {'repo': repo_path.name, 'criteria': {}, 'error': 'Feedback generation failed'}}
-        if result.stdout:
+        if result.stdout and not verbose:
             print(result.stdout)
         print("✓ Feedback generated")
 
         # Step 5: Create issue or save to file
         print("\n5️⃣  Saving feedback...")
-        result = subprocess.run(
+        result = _run_subprocess(
             [sys.executable, str(SCRIPT_DIR / 'create_issue.py')],
-            capture_output=True, text=True, env=env
+            env=env, verbose=verbose
         )
         if result.returncode != 0:
-            print(f"❌ Save failed:\n{result.stderr}")
+            if not verbose:
+                print(f"❌ Save failed:\n{result.stderr}")
             return {'success': False, 'scores': {'repo': repo_path.name, 'criteria': {}, 'error': 'Save failed'}}
-        if result.stdout:
+        if result.stdout and not verbose:
             print(result.stdout)
         print("✓ Feedback saved")
 
@@ -573,6 +607,10 @@ def main():
     scoring_group.add_argument('--no-scoring', dest='scoring', action='store_false',
                                help='Disable numerical scoring, show rubric levels (overrides repo config)')
 
+    # Diagnostics
+    parser.add_argument('--verbose', action='store_true',
+                       help='Stream subprocess output live (shows per-criterion progress, tokens, timing)')
+
     # Model listing
     parser.add_argument('--list-models', nargs='?', const='http://localhost:1234/v1',
                        help='Query an OpenAI-compatible endpoint for available models '
@@ -656,7 +694,8 @@ def main():
                                            docker_image=args.docker_image,
                                            docker_quarto=args.docker_quarto,
                                            scoring=args.scoring,
-                                           disable_json_mode=args.disable_json_mode)
+                                           disable_json_mode=args.disable_json_mode,
+                                           verbose=args.verbose)
             if result and result.get('success'):
                 successful += 1
             else:
@@ -722,7 +761,8 @@ def main():
                                                docker_image=args.docker_image,
                                                docker_quarto=args.docker_quarto,
                                                scoring=args.scoring,
-                                               disable_json_mode=args.disable_json_mode)
+                                               disable_json_mode=args.disable_json_mode,
+                                               verbose=args.verbose)
                 if result['success']:
                     successful += 1
                 else:
@@ -758,7 +798,8 @@ def main():
                                     docker_image=args.docker_image,
                                     docker_quarto=args.docker_quarto,
                                     scoring=args.scoring,
-                                    disable_json_mode=args.disable_json_mode)
+                                    disable_json_mode=args.disable_json_mode,
+                                    verbose=args.verbose)
     sys.exit(0 if result['success'] else 1)
 
 if __name__ == '__main__':
