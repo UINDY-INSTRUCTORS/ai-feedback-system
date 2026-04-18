@@ -226,3 +226,87 @@ def test_load_parsed_report_raises_when_parser_fails(tmp_path):
         import pytest as _pytest
         with _pytest.raises(RuntimeError, match='parse_report.py failed'):
             focus.load_parsed_report(repo)
+
+
+def _make_result(assessment='Satisfactory', success=True):
+    if not success:
+        return {'success': False, 'error': 'Test error', 'criterion': 'X'}
+    return {
+        'success': True,
+        'criterion': 'Results',
+        'feedback': {
+            'overall_assessment': assessment,
+            'summary': 'Good overall.',
+            'strengths': ['Clear figures', 'Good labels'],
+            'areas_for_improvement': [
+                {'issue': 'Missing units', 'suggestion': 'Add units to axes'}
+            ],
+        },
+        'tokens': {'total_tokens': 100},
+    }
+
+
+def test_format_criterion_result_success():
+    result = _make_result('Exemplary')
+    text = focus.format_criterion_result(result)
+    assert 'Exemplary' in text
+    assert 'Clear figures' in text
+    assert 'Missing units' in text
+    assert 'Add units to axes' in text
+
+
+def test_format_criterion_result_error():
+    result = _make_result(success=False)
+    text = focus.format_criterion_result(result)
+    assert 'ERROR' in text or 'Test error' in text
+
+
+def test_format_summary_table_single_model():
+    repo_results = [
+        {'repo': 'student-1', 'models': {'gpt-4o': _make_result('Exemplary')}},
+        {'repo': 'student-2', 'models': {'gpt-4o': _make_result('Developing')}},
+    ]
+    table = focus.format_summary_table(repo_results, ['gpt-4o'])
+    assert 'student-1' in table
+    assert 'student-2' in table
+    assert 'Exemplary' in table
+    assert 'Developing' in table
+
+
+def test_format_summary_table_multiple_models():
+    repo_results = [
+        {'repo': 'student-1', 'models': {
+            'gpt-4o': _make_result('Exemplary'),
+            'llama-4': _make_result('Satisfactory'),
+        }},
+    ]
+    table = focus.format_summary_table(repo_results, ['gpt-4o', 'llama-4'])
+    assert 'gpt-4o' in table
+    assert 'llama-4' in table
+    assert 'Exemplary' in table
+    assert 'Satisfactory' in table
+
+
+def test_format_summary_table_error_case():
+    repo_results = [
+        {'repo': 'broken', 'models': {'gpt-4o': {'success': False, 'error': 'oops'}}},
+    ]
+    table = focus.format_summary_table(repo_results, ['gpt-4o'])
+    assert 'ERROR' in table
+
+
+def test_format_aggregated_report_structure():
+    repo_results = [
+        {'repo': 'student-1', 'models': {'gpt-4o': _make_result('Satisfactory')}},
+    ]
+    report = focus.format_aggregated_report(
+        repo_results,
+        criterion_name='Results & Analysis',
+        models=['gpt-4o'],
+        rubric_path=Path('/some/rubric.yml'),
+        guidance_path=Path('/some/guidance.md'),
+    )
+    assert '# Focus Feedback: Results & Analysis' in report
+    assert 'student-1' in report
+    assert 'gpt-4o' in report
+    assert 'Summary' in report

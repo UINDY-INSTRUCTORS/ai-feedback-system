@@ -168,17 +168,99 @@ def load_parsed_report(repo: Path) -> dict:
         return json.load(f)
 
 
+def _get_assessment(result: dict) -> str:
+    """Extract assessment label from a criterion result dict."""
+    if not result.get('success'):
+        return 'ERROR'
+    fb = result.get('feedback', {})
+    return fb.get('overall_assessment', 'N/A')
+
+
 def format_summary_table(repo_results: list, models: list) -> str:
-    pass
+    """Build a markdown summary table: rows=repos, cols=models."""
+    header = ['Repo'] + models
+    rows = []
+    for entry in repo_results:
+        row = [entry['repo']]
+        for model in models:
+            result = entry['models'].get(model, {'success': False, 'error': 'Not run'})
+            row.append(_get_assessment(result))
+        rows.append(row)
+
+    col_widths = [len(h) for h in header]
+    for row in rows:
+        for i, cell in enumerate(row):
+            col_widths[i] = max(col_widths[i], len(str(cell)))
+
+    def fmt(cells):
+        return '| ' + ' | '.join(str(c).ljust(col_widths[i]) for i, c in enumerate(cells)) + ' |'
+
+    sep = '|' + '|'.join('-' * (w + 2) for w in col_widths) + '|'
+    return '\n'.join([fmt(header), sep] + [fmt(row) for row in rows])
 
 
 def format_criterion_result(result: dict) -> str:
-    pass
+    """Format a single criterion result as markdown."""
+    if not result.get('success'):
+        return f'> **ERROR:** {result.get("error", "Unknown error")}\n'
+
+    fb = result.get('feedback', {})
+    lines = [f'**Assessment:** {fb.get("overall_assessment", "N/A")}\n']
+
+    summary = fb.get('summary', '')
+    if summary:
+        lines.append(f'**Summary:** {summary}\n')
+
+    strengths = fb.get('strengths', [])
+    if strengths:
+        lines.append('**Strengths:**')
+        lines.extend(f'- {s}' for s in strengths)
+        lines.append('')
+
+    improvements = fb.get('areas_for_improvement', [])
+    if improvements:
+        lines.append('**Areas for Improvement:**')
+        for item in improvements:
+            if isinstance(item, dict):
+                lines.append(
+                    f'- **Issue:** {item.get("issue", "")}  '
+                    f'**Suggestion:** {item.get("suggestion", "")}'
+                )
+            else:
+                lines.append(f'- {item}')
+        lines.append('')
+
+    return '\n'.join(lines)
 
 
 def format_aggregated_report(repo_results: list, criterion_name: str, models: list,
                               rubric_path: Optional[Path], guidance_path: Optional[Path]) -> str:
-    pass
+    """Build the complete aggregated markdown report."""
+    now = datetime.now().strftime('%Y-%m-%d %H:%M')
+    rubric_str = str(rubric_path) if rubric_path else 'default'
+    guidance_str = str(guidance_path) if guidance_path else 'default'
+
+    lines = [
+        f'# Focus Feedback: {criterion_name}',
+        f'Generated: {now}  |  Repos: {len(repo_results)}  |  Models: {", ".join(models)}',
+        f'Rubric: {rubric_str}  |  Guidance: {guidance_str}',
+        '',
+        '## Summary',
+        '',
+        format_summary_table(repo_results, models),
+        '',
+    ]
+
+    for entry in repo_results:
+        lines += ['---', '', f'## {entry["repo"]}', '']
+        for model in models:
+            result = entry['models'].get(model, {'success': False, 'error': 'Not run'})
+            assessment = _get_assessment(result)
+            lines += [f'### {model} — {assessment}', '']
+            lines.append(format_criterion_result(result))
+            lines.append('')
+
+    return '\n'.join(lines)
 
 
 def run_focus_for_repo(repo: Path, criterion: dict, guidance: str, config: dict,
