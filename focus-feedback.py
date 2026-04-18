@@ -72,7 +72,16 @@ def load_repo_paths(repos_file: Optional[str], repos_dir: Optional[str]) -> list
 
 
 def find_criterion(rubric: dict, name: str) -> Optional[dict]:
-    pass
+    """Find criterion by exact name, then case-insensitive. Returns None if not found."""
+    criteria = rubric.get('criteria', [])
+    for c in criteria:
+        if c.get('name') == name:
+            return c
+    name_lower = name.lower()
+    for c in criteria:
+        if c.get('name', '').lower() == name_lower:
+            return c
+    return None
 
 
 def load_rubric(override: Optional[Path], repo: Path, instructor_repo: Optional[Path]):

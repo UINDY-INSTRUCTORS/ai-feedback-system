@@ -62,3 +62,31 @@ def test_load_repo_paths_from_stdin(tmp_path):
     with patch('sys.stdin', io.StringIO(f'{repo1}\n')):
         result = focus.load_repo_paths('-', None)
     assert result == [repo1]
+
+
+def test_find_criterion_exact_match(sample_rubric):
+    result = focus.find_criterion(sample_rubric, 'Theory & Explanation')
+    assert result is not None
+    assert result['name'] == 'Theory & Explanation'
+
+
+def test_find_criterion_case_insensitive(sample_rubric):
+    result = focus.find_criterion(sample_rubric, 'theory & explanation')
+    assert result is not None
+    assert result['name'] == 'Theory & Explanation'
+
+
+def test_find_criterion_not_found(sample_rubric):
+    result = focus.find_criterion(sample_rubric, 'Nonexistent Criterion')
+    assert result is None
+
+
+def test_find_criterion_exact_takes_priority():
+    rubric = {
+        'criteria': [
+            {'name': 'results', 'id': 'lower'},
+            {'name': 'Results', 'id': 'upper'},
+        ]
+    }
+    result = focus.find_criterion(rubric, 'Results')
+    assert result['id'] == 'upper'
