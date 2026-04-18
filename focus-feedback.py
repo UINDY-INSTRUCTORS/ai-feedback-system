@@ -44,8 +44,31 @@ MINIMAL_CONFIG = {
 }
 
 
+def _load_paths_from_file(file_path: str) -> list:
+    """Read repo paths from a file or stdin ('-'), one per line."""
+    if file_path == '-':
+        lines = sys.stdin.read().splitlines()
+    else:
+        lines = Path(file_path).read_text().splitlines()
+    return [Path(line.strip()) for line in lines if line.strip()]
+
+
+def _find_repos_in_dir(directory: Path) -> list:
+    """Discover subdirectories of directory that contain index.qmd."""
+    return sorted(
+        p for p in Path(directory).iterdir()
+        if p.is_dir() and (p / 'index.qmd').exists()
+    )
+
+
 def load_repo_paths(repos_file: Optional[str], repos_dir: Optional[str]) -> list:
-    pass
+    """Return list of repo Paths. repos_file and repos_dir are mutually exclusive."""
+    if repos_file is not None:
+        return _load_paths_from_file(repos_file)
+    elif repos_dir is not None:
+        return _find_repos_in_dir(Path(repos_dir))
+    else:
+        return _load_paths_from_file('-')
 
 
 def find_criterion(rubric: dict, name: str) -> Optional[dict]:
