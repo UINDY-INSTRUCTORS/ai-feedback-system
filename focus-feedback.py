@@ -317,9 +317,11 @@ def main():
                         help='Criterion name to evaluate (must match a criterion in rubric.yml).')
     parser.add_argument('--models', nargs='+', metavar='MODEL',
                         help='One or more model IDs to compare. Defaults to configured primary model.')
+    parser.add_argument('--profile', metavar='NAME',
+                        help='Named provider profile from ~/.ai-feedback/config.yml.')
     parser.add_argument('--provider',
                         choices=['github_models', 'openrouter', 'anthropic', 'gemini', 'openai'],
-                        help='AI provider.')
+                        help='AI provider (overrides profile).')
     parser.add_argument('--disable-json-mode', action='store_true',
                         help='Skip JSON response format (for models that do not support it).')
     parser.add_argument('--rubric', metavar='PATH', type=Path,
@@ -380,7 +382,7 @@ def main():
 
     try:
         config = load_config(args.config, first_repo, instructor_repo)
-        provider_config_base = resolve_provider_config(config)
+        provider_config_base = resolve_provider_config(config, profile=args.profile)
     except Exception as e:
         print(f'ERROR: {e}', file=sys.stderr)
         sys.exit(1)

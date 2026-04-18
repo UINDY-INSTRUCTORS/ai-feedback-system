@@ -83,125 +83,145 @@ def create_default_global_config():
 # This file sets defaults for local feedback runs.
 # Environment variables take precedence over this file, and this file
 # takes precedence over per-repo .github/config.yml.
+#
+# Priority: env vars > --profile (CLI) > this file (top-level) > per-repo config > defaults
 
-# AI Provider: github_models, openrouter, anthropic, gemini, openai
+# Default active profile (overridden by --profile on the CLI or AI_PROFILE env var)
+# profile: github
+
+# Named profiles — switch with: --profile <name>
+# profiles:
+#   github:
+#     provider: github_models
+#     model:
+#       primary: gpt-4o
+#       fallback: gpt-4o-mini
+#       extractor: gpt-4o-mini
+#
+#   anthropic:
+#     provider: anthropic
+#     model:
+#       primary: claude-sonnet-4-20250514
+#       fallback: claude-haiku-4-5-20251001
+#       extractor: claude-haiku-4-5-20251001
+#
+#   openrouter-llama:
+#     provider: openrouter
+#     model:
+#       primary: meta-llama/llama-4-scout
+#       fallback: meta-llama/llama-4-scout
+#       extractor: openai/gpt-4o-mini
+#
+#   local:
+#     provider: openrouter
+#     api_base: http://localhost:1234/v1
+#     disable_json_mode: true
+#     model:
+#       primary: your-local-model-id
+
+# Fallback top-level settings (used when no profile is active)
 provider: github_models
-
-# Models (override per-repo config)
 # model:
 #   primary: gpt-4o
 #   fallback: gpt-4o-mini
 #   extractor: gpt-4o-mini
 
-# API keys can also be set here instead of environment variables.
-# Environment variables always take precedence.
+# API keys (environment variables always take precedence)
 # api_key: your-key-here
 
-# Disable JSON mode (response_format: json_object) for models that don't support it
-# Set to true to skip JSON mode and avoid retries on 400 errors
 # disable_json_mode: false
-
-# Provider-specific examples:
-#
-# --- OpenRouter ---
-# provider: openrouter
-# model:
-#   primary: anthropic/claude-sonnet-4-20250514
-#   fallback: anthropic/claude-haiku-4-5-20251001
-#   extractor: openai/gpt-4o-mini
-#
-# --- Anthropic ---
-# provider: anthropic
-# model:
-#   primary: claude-sonnet-4-20250514
-#   fallback: claude-haiku-4-5-20251001
-#   extractor: claude-haiku-4-5-20251001
-#
-# --- Gemini ---
-# provider: gemini
-# model:
-#   primary: gemini-2.5-flash
-#   fallback: gemini-2.5-flash
-#   extractor: gemini-2.5-flash
-#
-# --- OpenAI direct ---
-# provider: openai
-# model:
-#   primary: gpt-4o
-#   fallback: gpt-4o-mini
-#   extractor: gpt-4o-mini
 """
     with open(GLOBAL_CONFIG_PATH, 'w') as f:
         f.write(default_config)
     print(f"Created default global config: {GLOBAL_CONFIG_PATH}")
 
 
-def resolve_provider_config(repo_config: dict = None) -> dict:
+def resolve_provider_config(repo_config: dict = None, profile: str = None) -> dict:
     """
     Resolve provider configuration from all sources.
-    Priority: env vars > global config > repo config > defaults.
+    Priority: env vars > profile > global config > repo config > defaults.
 
     Returns dict with keys: provider, model, fallback, extractor, api_key, api_base
     """
     global_config = load_global_config()
     repo_config = repo_config or {}
 
-    # Provider
+    # Resolve named profile (CLI --profile > AI_PROFILE env var > global config default)
+    profile_name = profile or os.environ.get('AI_PROFILE') or global_config.get('profile')
+    profile_config = {}
+    if profile_name:
+        profiles = global_config.get('profiles', {})
+        if profile_name in profiles:
+            profile_config = profiles[profile_name] or {}
+        else:
+            available = ', '.join(profiles.keys()) if profiles else 'none'
+            print(f"Warning: profile '{profile_name}' not found. Available: {available}", file=sys.stderr)
+
+    # Provider: env var > profile > global config > repo config > default
     provider = (
         os.environ.get('AI_PROVIDER')
+        or profile_config.get('provider')
         or global_config.get('provider')
         or repo_config.get('provider')
         or 'github_models'
     )
 
-    # Model names
+    # Model names: env var > profile > global config > repo config > provider default
     repo_model = repo_config.get('model', {})
     global_model = global_config.get('model', {})
+    profile_model = profile_config.get('model', {})
     default_model = PROVIDER_DEFAULT_MODELS.get(provider, 'gpt-4o')
 
     model = (
         os.environ.get('AI_MODEL')
+        or profile_model.get('primary')
         or global_model.get('primary')
         or repo_model.get('primary')
         or default_model
     )
     fallback = (
         os.environ.get('AI_FALLBACK_MODEL')
+        or profile_model.get('fallback')
         or global_model.get('fallback')
         or repo_model.get('fallback')
         or model
     )
     extractor = (
         os.environ.get('AI_EXTRACTOR_MODEL')
+        or profile_model.get('extractor')
         or global_model.get('extractor')
         or repo_model.get('extractor')
         or ('gpt-4o-mini' if provider == 'github_models' else model)
     )
     extractor_fallback = (
         os.environ.get('AI_EXTRACTOR_FALLBACK_MODEL')
+        or profile_model.get('extractor_fallback')
         or global_model.get('extractor_fallback')
         or repo_model.get('extractor_fallback')
         or fallback
     )
 
-    # API key
+    # API key: env var > profile > global config
     key_envvar = PROVIDER_KEY_ENVVARS.get(provider, 'GITHUB_TOKEN')
     api_key = (
         os.environ.get(key_envvar)
         or os.environ.get('AI_API_KEY')
+        or profile_config.get('api_key')
         or global_config.get('api_key')
     )
 
-    # API base URL (allow override)
+    # API base URL: env var > profile > global config > provider default
     api_base = (
         os.environ.get('AI_API_BASE')
+        or profile_config.get('api_base')
         or global_config.get('api_base')
         or PROVIDER_ENDPOINTS.get(provider)
     )
 
-    # Disable JSON mode for models that don't support it
+    # Disable JSON mode
     disable_json_mode = (
         os.environ.get('AI_DISABLE_JSON_MODE', '').lower() in ('true', '1', 'yes')
+        or profile_config.get('disable_json_mode', False)
         or global_config.get('disable_json_mode', False)
         or repo_config.get('disable_json_mode', False)
     )

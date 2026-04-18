@@ -194,7 +194,7 @@ def render_quarto_local(repo_path: Path, env: dict, verbose: bool = False):
 
 
 def run_feedback_pipeline(repo_path: Path, output_path: Path = None,
-                          provider: str = None, model: str = None,
+                          profile: str = None, provider: str = None, model: str = None,
                           use_docker: bool = False, skip_render: bool = False,
                           docker_image: str = None, docker_quarto: str = None,
                           scoring: bool = None, disable_json_mode: bool = False,
@@ -229,6 +229,8 @@ def run_feedback_pipeline(repo_path: Path, output_path: Path = None,
         env['OUTPUT_FORMAT'] = 'flat_file'
 
         # Pass provider/model overrides via env vars
+        if profile:
+            env['AI_PROFILE'] = profile
         if provider:
             env['AI_PROVIDER'] = provider
         if model:
@@ -580,9 +582,11 @@ def main():
                        help='Process repos that produced PDFs in this directory (path = submissions dir)')
 
     # Provider options
+    parser.add_argument('--profile',
+                       help='Named provider profile from ~/.ai-feedback/config.yml')
     parser.add_argument('--provider',
                        choices=['github_models', 'openrouter', 'anthropic', 'gemini', 'openai'],
-                       help='AI provider (overrides global/repo config)')
+                       help='AI provider (overrides profile and global/repo config)')
     parser.add_argument('--model',
                        help='Model name (overrides global/repo config)')
     parser.add_argument('--disable-json-mode', action='store_true',
@@ -689,6 +693,7 @@ def main():
                 setup_feedback_config(repo, instructor_repo, output_format='flat_file')
 
             result = run_feedback_pipeline(repo, output_path,
+                                           profile=args.profile,
                                            provider=args.provider, model=args.model,
                                            use_docker=args.docker, skip_render=args.no_render,
                                            docker_image=args.docker_image,
@@ -756,6 +761,7 @@ def main():
                     setup_feedback_config(repo, instructor_repo, output_format='flat_file')
 
                 result = run_feedback_pipeline(repo, output_path,
+                                               profile=args.profile,
                                                provider=args.provider, model=args.model,
                                                use_docker=args.docker, skip_render=args.no_render,
                                                docker_image=args.docker_image,
@@ -793,6 +799,7 @@ def main():
         setup_feedback_config(path, instructor_repo, output_format='flat_file')
 
     result = run_feedback_pipeline(path, output_path,
+                                    profile=args.profile,
                                     provider=args.provider, model=args.model,
                                     use_docker=args.docker, skip_render=args.no_render,
                                     docker_image=args.docker_image,
