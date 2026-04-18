@@ -84,16 +84,70 @@ def find_criterion(rubric: dict, name: str) -> Optional[dict]:
     return None
 
 
-def load_rubric(override: Optional[Path], repo: Path, instructor_repo: Optional[Path]):
-    pass
+def _resolve_path(*candidates) -> Optional[Path]:
+    """Return first existing path from candidates (skipping None)."""
+    for p in candidates:
+        if p is not None and Path(p).exists():
+            return Path(p)
+    return None
 
 
-def load_guidance(override: Optional[Path], repo: Path, instructor_repo: Optional[Path]):
-    pass
+def load_rubric(override: Optional[Path], repo: Path,
+                instructor_repo: Optional[Path]):
+    """Load rubric.yml with override precedence. Returns (rubric_dict, path_used)."""
+    inst_path = (Path(instructor_repo) / '.github' / 'feedback' / 'rubric.yml'
+                 if instructor_repo else None)
+    path = _resolve_path(
+        override,
+        repo / '.github' / 'feedback' / 'rubric.yml',
+        inst_path,
+    )
+    if path is None:
+        raise FileNotFoundError(
+            'No rubric.yml found. Use --rubric or ensure '
+            '.github/feedback/rubric.yml exists in the repo or instructor repo.'
+        )
+    if Path(path).suffix == '.md':
+        raise ValueError(
+            f'--rubric points to a .md file. Convert it first:\n'
+            f'  python dot_github_folder/scripts/rubric_converter.py md-to-yaml {path} rubric.yml'
+        )
+    with open(path) as f:
+        return yaml.safe_load(f), path
 
 
-def load_config(override: Optional[Path], repo: Path, instructor_repo: Optional[Path]) -> dict:
-    pass
+def load_guidance(override: Optional[Path], repo: Path,
+                  instructor_repo: Optional[Path]):
+    """Load guidance.md with override precedence. Returns (text, path_used)."""
+    inst_path = (Path(instructor_repo) / '.github' / 'feedback' / 'guidance.md'
+                 if instructor_repo else None)
+    path = _resolve_path(
+        override,
+        repo / '.github' / 'feedback' / 'guidance.md',
+        inst_path,
+    )
+    if path is None:
+        raise FileNotFoundError(
+            'No guidance.md found. Use --guidance or ensure '
+            '.github/feedback/guidance.md exists in the repo or instructor repo.'
+        )
+    return Path(path).read_text(), path
+
+
+def load_config(override: Optional[Path], repo: Path,
+                instructor_repo: Optional[Path]) -> dict:
+    """Load config.yml with override precedence, falling back to MINIMAL_CONFIG."""
+    inst_path = (Path(instructor_repo) / '.github' / 'config.yml'
+                 if instructor_repo else None)
+    path = _resolve_path(
+        override,
+        repo / '.github' / 'config.yml',
+        inst_path,
+    )
+    if path is None:
+        return copy.deepcopy(MINIMAL_CONFIG)
+    with open(path) as f:
+        return yaml.safe_load(f)
 
 
 def load_parsed_report(repo: Path) -> dict:

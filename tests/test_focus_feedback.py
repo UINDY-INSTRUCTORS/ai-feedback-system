@@ -90,3 +90,95 @@ def test_find_criterion_exact_takes_priority():
     }
     result = focus.find_criterion(rubric, 'Results')
     assert result['id'] == 'upper'
+
+
+import yaml as _yaml
+
+
+def _write_rubric(path, rubric):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(_yaml.dump(rubric))
+
+
+def test_load_rubric_uses_override(tmp_path, sample_rubric):
+    override = tmp_path / 'my-rubric.yml'
+    _write_rubric(override, sample_rubric)
+    repo = tmp_path / 'repo'
+    repo.mkdir()
+
+    rubric, path = focus.load_rubric(override, repo, None)
+    assert rubric['criteria'][0]['name'] == 'Theory & Explanation'
+    assert path == override
+
+
+def test_load_rubric_falls_back_to_repo(tmp_path, sample_rubric):
+    repo = tmp_path / 'repo'
+    repo_rubric = repo / '.github' / 'feedback' / 'rubric.yml'
+    _write_rubric(repo_rubric, sample_rubric)
+
+    rubric, path = focus.load_rubric(None, repo, None)
+    assert rubric['criteria'][0]['name'] == 'Theory & Explanation'
+    assert path == repo_rubric
+
+
+def test_load_rubric_falls_back_to_instructor(tmp_path, sample_rubric):
+    repo = tmp_path / 'repo'
+    repo.mkdir()
+    instructor = tmp_path / 'instructor'
+    inst_rubric = instructor / '.github' / 'feedback' / 'rubric.yml'
+    _write_rubric(inst_rubric, sample_rubric)
+
+    rubric, path = focus.load_rubric(None, repo, instructor)
+    assert path == inst_rubric
+
+
+def test_load_rubric_raises_when_not_found(tmp_path):
+    repo = tmp_path / 'repo'
+    repo.mkdir()
+    import pytest as _pytest
+    with _pytest.raises(FileNotFoundError):
+        focus.load_rubric(None, repo, None)
+
+
+def test_load_rubric_raises_on_md_extension(tmp_path):
+    md_file = tmp_path / 'RUBRIC.md'
+    md_file.write_text('# Rubric')
+    repo = tmp_path / 'repo'
+    repo.mkdir()
+    import pytest as _pytest
+    with _pytest.raises(ValueError, match='md-to-yaml'):
+        focus.load_rubric(md_file, repo, None)
+
+
+def test_load_config_falls_back_to_minimal(tmp_path):
+    repo = tmp_path / 'repo'
+    repo.mkdir()
+    config = focus.load_config(None, repo, None)
+    assert config == focus.MINIMAL_CONFIG
+
+
+def test_load_config_uses_override(tmp_path):
+    override = tmp_path / 'config.yml'
+    override.write_text(_yaml.dump({'feedback': {'scoring_enabled': True}}))
+    repo = tmp_path / 'repo'
+    repo.mkdir()
+    config = focus.load_config(override, repo, None)
+    assert config['feedback']['scoring_enabled'] is True
+
+
+def test_load_guidance_uses_override(tmp_path):
+    override = tmp_path / 'guidance.md'
+    override.write_text('# My Guidance')
+    repo = tmp_path / 'repo'
+    repo.mkdir()
+    text, path = focus.load_guidance(override, repo, None)
+    assert text == '# My Guidance'
+    assert path == override
+
+
+def test_load_guidance_raises_when_not_found(tmp_path):
+    repo = tmp_path / 'repo'
+    repo.mkdir()
+    import pytest as _pytest
+    with _pytest.raises(FileNotFoundError):
+        focus.load_guidance(None, repo, None)
