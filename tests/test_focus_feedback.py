@@ -310,3 +310,90 @@ def test_format_aggregated_report_structure():
     assert 'student-1' in report
     assert 'gpt-4o' in report
     assert 'Summary' in report
+
+
+def test_run_focus_for_repo_success(tmp_path, sample_parsed_report,
+                                    sample_criterion, sample_rubric):
+    repo = tmp_path / 'student-1'
+    repo.mkdir()
+    (repo / 'parsed_report.json').write_text(json.dumps(sample_parsed_report))
+    (repo / 'index.qmd').touch()
+
+    fake_result = {
+        'criterion': 'Implementation/Code',
+        'feedback': {'overall_assessment': 'Satisfactory', 'summary': 'ok',
+                     'strengths': [], 'areas_for_improvement': []},
+        'success': True,
+        'tokens': {'total_tokens': 50},
+    }
+    provider_config = {'model': 'gpt-4o', 'provider': 'github_models',
+                       'api_base': 'https://example.com', 'fallback': 'gpt-4o-mini',
+                       'extractor': 'gpt-4o-mini', 'api_key': 'test'}
+
+    with patch.object(focus, 'analyze_criterion', return_value=fake_result):
+        entry = focus.run_focus_for_repo(
+            repo, sample_criterion, 'guidance text', {},
+            models=['gpt-4o'], provider_config_base=provider_config,
+        )
+
+    assert entry['repo'] == 'student-1'
+    assert entry['models']['gpt-4o']['success'] is True
+
+
+def test_run_focus_for_repo_multiple_models(tmp_path, sample_parsed_report,
+                                             sample_criterion):
+    repo = tmp_path / 'student-1'
+    repo.mkdir()
+    (repo / 'parsed_report.json').write_text(json.dumps(sample_parsed_report))
+    (repo / 'index.qmd').touch()
+
+    call_count = {'n': 0}
+
+    def fake_analyze(report, criterion, guidance, config, criterion_index=0,
+                     provider_config=None):
+        call_count['n'] += 1
+        return {
+            'criterion': criterion['name'],
+            'feedback': {'overall_assessment': f'result-{call_count["n"]}',
+                         'summary': '', 'strengths': [], 'areas_for_improvement': []},
+            'success': True,
+            'tokens': {'total_tokens': 10},
+        }
+
+    provider_config = {'model': 'gpt-4o', 'provider': 'github_models',
+                       'api_base': 'https://example.com', 'fallback': 'gpt-4o-mini',
+                       'extractor': 'gpt-4o-mini', 'api_key': 'test'}
+
+    with patch.object(focus, 'analyze_criterion', side_effect=fake_analyze):
+        entry = focus.run_focus_for_repo(
+            repo, sample_criterion, 'guidance', {},
+            models=['model-a', 'model-b'], provider_config_base=provider_config,
+        )
+
+    assert 'model-a' in entry['models']
+    assert 'model-b' in entry['models']
+    assert call_count['n'] == 2
+
+
+def test_run_focus_for_repo_parse_failure(tmp_path, sample_criterion):
+    repo = tmp_path / 'broken-repo'
+    repo.mkdir()
+    # No parsed_report.json and parse_report.py will fail
+
+    def fake_run(cmd, **kwargs):
+        m = MagicMock()
+        m.returncode = 1
+        m.stderr = 'failed'
+        return m
+
+    provider_config = {'model': 'gpt-4o', 'provider': 'github_models',
+                       'api_base': 'https://example.com', 'fallback': 'gpt-4o-mini',
+                       'extractor': 'gpt-4o-mini', 'api_key': 'test'}
+
+    with patch('subprocess.run', side_effect=fake_run):
+        entry = focus.run_focus_for_repo(
+            repo, sample_criterion, 'guidance', {},
+            models=['gpt-4o'], provider_config_base=provider_config,
+        )
+
+    assert entry['models']['gpt-4o']['success'] is False

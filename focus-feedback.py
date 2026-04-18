@@ -265,8 +265,38 @@ def format_aggregated_report(repo_results: list, criterion_name: str, models: li
 
 def run_focus_for_repo(repo: Path, criterion: dict, guidance: str, config: dict,
                        models: list, provider_config_base: dict,
-                       disable_json_mode: bool = False, verbose: bool = False) -> dict:
-    pass
+                       disable_json_mode: bool = False,
+                       verbose: bool = False) -> dict:
+    try:
+        report = load_parsed_report(repo)
+    except Exception as e:
+        error = {'success': False, 'error': str(e)}
+        return {'repo': repo.name, 'models': {m: error for m in models}}
+
+    model_results = {}
+    original_cwd = Path.cwd()
+    try:
+        os.chdir(repo)
+        if disable_json_mode:
+            os.environ['AI_DISABLE_JSON_MODE'] = 'true'
+        for model in models:
+            print(f'\n  [{repo.name}] Model: {model}')
+            pc = copy.deepcopy(provider_config_base)
+            pc['model'] = model
+            try:
+                result = analyze_criterion(
+                    report, criterion, guidance, config,
+                    criterion_index=0, provider_config=pc,
+                )
+                model_results[model] = result
+            except Exception as e:
+                model_results[model] = {'success': False, 'error': str(e)}
+    finally:
+        os.chdir(original_cwd)
+        if disable_json_mode:
+            os.environ.pop('AI_DISABLE_JSON_MODE', None)
+
+    return {'repo': repo.name, 'models': model_results}
 
 
 def main():
