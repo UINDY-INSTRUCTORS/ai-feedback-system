@@ -278,6 +278,43 @@ python run-local-feedback.py ~/test-repos --batch --output-dir ./batch-review
 # Remove test repos and deploy to GitHub
 ```
 
+## Provider Profiles
+
+Instead of editing `~/.ai-feedback/config.yml` each time you want to switch providers, define named profiles and select one with `--profile`:
+
+```yaml
+# ~/.ai-feedback/config.yml
+
+profile: anthropic  # active by default
+
+profiles:
+  anthropic:
+    provider: anthropic
+    model:
+      primary: claude-sonnet-4-20250514
+
+  openrouter-llama:
+    provider: openrouter
+    model:
+      primary: meta-llama/llama-4-scout
+      extractor: openai/gpt-4o-mini
+
+  github:
+    provider: github_models
+    model:
+      primary: gpt-4o
+```
+
+Then select a profile on the CLI — no config editing required:
+
+```bash
+python run-local-feedback.py /path/to/repo --profile anthropic
+python run-local-feedback.py /path/to/repo --profile openrouter-llama
+python focus-feedback.py --repos repos.txt --criterion "Results" --profile github
+```
+
+`--provider` and `--models` still override profile settings if you need a one-off change.
+
 ## Environment Variables
 
 You can also control behavior via environment variables:
