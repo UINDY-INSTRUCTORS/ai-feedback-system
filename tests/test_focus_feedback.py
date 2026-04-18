@@ -1,6 +1,7 @@
 """Tests for focus-feedback.py"""
 import io
 import json
+import os
 import sys
 from pathlib import Path
 from importlib import import_module
@@ -397,3 +398,55 @@ def test_run_focus_for_repo_parse_failure(tmp_path, sample_criterion):
         )
 
     assert entry['models']['gpt-4o']['success'] is False
+
+
+def test_run_focus_for_repo_analyze_exception(tmp_path, sample_parsed_report, sample_criterion):
+    repo = tmp_path / 'student-1'
+    repo.mkdir()
+    (repo / 'parsed_report.json').write_text(json.dumps(sample_parsed_report))
+
+    provider_config = {'model': 'gpt-4o', 'provider': 'github_models',
+                       'api_base': 'https://example.com', 'fallback': 'gpt-4o-mini',
+                       'extractor': 'gpt-4o-mini', 'api_key': 'test'}
+
+    with patch.object(focus, 'analyze_criterion', side_effect=RuntimeError('API error')):
+        entry = focus.run_focus_for_repo(
+            repo, sample_criterion, 'guidance', {},
+            models=['gpt-4o'], provider_config_base=provider_config,
+        )
+
+    assert entry['models']['gpt-4o']['success'] is False
+    assert 'API error' in entry['models']['gpt-4o']['error']
+
+
+def test_run_focus_for_repo_disable_json_mode(tmp_path, sample_parsed_report, sample_criterion):
+    repo = tmp_path / 'student-1'
+    repo.mkdir()
+    (repo / 'parsed_report.json').write_text(json.dumps(sample_parsed_report))
+
+    seen_env = {}
+
+    def fake_analyze(report, criterion, guidance, config, criterion_index=0,
+                     provider_config=None):
+        seen_env['during'] = os.environ.get('AI_DISABLE_JSON_MODE')
+        return {
+            'criterion': criterion['name'],
+            'feedback': {'overall_assessment': 'Satisfactory', 'summary': '',
+                         'strengths': [], 'areas_for_improvement': []},
+            'success': True, 'tokens': {'total_tokens': 10},
+        }
+
+    provider_config = {'model': 'gpt-4o', 'provider': 'github_models',
+                       'api_base': 'https://example.com', 'fallback': 'gpt-4o-mini',
+                       'extractor': 'gpt-4o-mini', 'api_key': 'test'}
+
+    os.environ.pop('AI_DISABLE_JSON_MODE', None)  # ensure clean state
+    with patch.object(focus, 'analyze_criterion', side_effect=fake_analyze):
+        focus.run_focus_for_repo(
+            repo, sample_criterion, 'guidance', {},
+            models=['gpt-4o'], provider_config_base=provider_config,
+            disable_json_mode=True,
+        )
+
+    assert seen_env['during'] == 'true'
+    assert 'AI_DISABLE_JSON_MODE' not in os.environ

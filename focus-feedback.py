@@ -280,7 +280,8 @@ def run_focus_for_repo(repo: Path, criterion: dict, guidance: str, config: dict,
         if disable_json_mode:
             os.environ['AI_DISABLE_JSON_MODE'] = 'true'
         for model in models:
-            print(f'\n  [{repo.name}] Model: {model}')
+            if verbose:
+                print(f'\n  [{repo.name}] Model: {model}')
             pc = copy.deepcopy(provider_config_base)
             pc['model'] = model
             try:
