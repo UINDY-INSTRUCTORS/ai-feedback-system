@@ -419,11 +419,11 @@ def test_run_focus_for_repo_analyze_exception(tmp_path, sample_parsed_report, sa
     assert 'API error' in entry['models']['gpt-4o']['error']
 
 
-import subprocess as _subprocess
+import subprocess
 
 
 def test_help_exits_cleanly():
-    result = _subprocess.run(
+    result = subprocess.run(
         [sys.executable, 'focus-feedback.py', '--help'],
         capture_output=True, text=True,
         cwd=str(Path(__file__).parent.parent),
@@ -435,9 +435,9 @@ def test_help_exits_cleanly():
     assert '--repos-dir' in result.stdout
 
 
-def test_missing_criterion_exits_with_error():
-    result = _subprocess.run(
-        [sys.executable, 'focus-feedback.py', '--repos-dir', '/tmp'],
+def test_missing_criterion_exits_with_error(tmp_path):
+    result = subprocess.run(
+        [sys.executable, 'focus-feedback.py', '--repos-dir', str(tmp_path)],
         capture_output=True, text=True,
         cwd=str(Path(__file__).parent.parent),
     )

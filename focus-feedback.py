@@ -378,8 +378,12 @@ def main():
         print(f'ERROR: {e}', file=sys.stderr)
         sys.exit(1)
 
-    config = load_config(args.config, first_repo, instructor_repo)
-    provider_config_base = resolve_provider_config(config)
+    try:
+        config = load_config(args.config, first_repo, instructor_repo)
+        provider_config_base = resolve_provider_config(config)
+    except Exception as e:
+        print(f'ERROR: {e}', file=sys.stderr)
+        sys.exit(1)
     models = args.models or [provider_config_base['model']]
 
     print(f'Criterion: {args.criterion}')
