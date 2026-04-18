@@ -4,7 +4,7 @@ import json
 import sys
 from pathlib import Path
 from importlib import import_module
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 focus = import_module('focus-feedback')
@@ -182,3 +182,47 @@ def test_load_guidance_raises_when_not_found(tmp_path):
     import pytest as _pytest
     with _pytest.raises(FileNotFoundError):
         focus.load_guidance(None, repo, None)
+
+
+def test_load_parsed_report_reads_existing(tmp_path, sample_parsed_report):
+    repo = tmp_path / 'repo'
+    repo.mkdir()
+    report_file = repo / 'parsed_report.json'
+    report_file.write_text(json.dumps(sample_parsed_report))
+
+    result = focus.load_parsed_report(repo)
+    assert result['metadata']['title'] == 'Project 1: Euler Method'
+
+
+def test_load_parsed_report_runs_parser_when_missing(tmp_path, sample_parsed_report):
+    repo = tmp_path / 'repo'
+    repo.mkdir()
+    report_file = repo / 'parsed_report.json'
+
+    def fake_run(cmd, **kwargs):
+        report_file.write_text(json.dumps(sample_parsed_report))
+        result = MagicMock()
+        result.returncode = 0
+        result.stderr = ''
+        return result
+
+    with patch('subprocess.run', side_effect=fake_run):
+        result = focus.load_parsed_report(repo)
+
+    assert result['metadata']['title'] == 'Project 1: Euler Method'
+
+
+def test_load_parsed_report_raises_when_parser_fails(tmp_path):
+    repo = tmp_path / 'repo'
+    repo.mkdir()
+
+    def fake_run(cmd, **kwargs):
+        result = MagicMock()
+        result.returncode = 1
+        result.stderr = 'parse error'
+        return result
+
+    with patch('subprocess.run', side_effect=fake_run):
+        import pytest as _pytest
+        with _pytest.raises(RuntimeError, match='parse_report.py failed'):
+            focus.load_parsed_report(repo)

@@ -151,7 +151,21 @@ def load_config(override: Optional[Path], repo: Path,
 
 
 def load_parsed_report(repo: Path) -> dict:
-    pass
+    """Load parsed_report.json, running parse_report.py as subprocess if missing."""
+    report_path = repo / 'parsed_report.json'
+    if not report_path.exists():
+        print(f'  parsed_report.json missing — running parse_report.py...')
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT_DIR / 'parse_report.py')],
+            cwd=repo,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f'parse_report.py failed:\n{result.stderr}')
+    with open(report_path) as f:
+        return json.load(f)
 
 
 def format_summary_table(repo_results: list, models: list) -> str:
