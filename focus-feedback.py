@@ -301,7 +301,136 @@ def run_focus_for_repo(repo: Path, criterion: dict, guidance: str, config: dict,
 
 
 def main():
-    pass
+    parser = argparse.ArgumentParser(
+        description='Run focused AI feedback on one criterion across many repos and models.',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=__doc__,
+    )
+
+    repo_group = parser.add_mutually_exclusive_group()
+    repo_group.add_argument('--repos', metavar='FILE',
+                            help='File of repo paths (one per line). Use - for stdin.')
+    repo_group.add_argument('--repos-dir', metavar='DIR',
+                            help='Discover all subdirs of DIR that contain index.qmd.')
+
+    parser.add_argument('--criterion', required=True,
+                        help='Criterion name to evaluate (must match a criterion in rubric.yml).')
+    parser.add_argument('--models', nargs='+', metavar='MODEL',
+                        help='One or more model IDs to compare. Defaults to configured primary model.')
+    parser.add_argument('--provider',
+                        choices=['github_models', 'openrouter', 'anthropic', 'gemini', 'openai'],
+                        help='AI provider.')
+    parser.add_argument('--disable-json-mode', action='store_true',
+                        help='Skip JSON response format (for models that do not support it).')
+    parser.add_argument('--rubric', metavar='PATH', type=Path,
+                        help='Override rubric.yml for all repos.')
+    parser.add_argument('--guidance', metavar='PATH', type=Path,
+                        help='Override guidance.md for all repos.')
+    parser.add_argument('--config', metavar='PATH', type=Path,
+                        help='Override config.yml for all repos.')
+    parser.add_argument('--instructor-repo', metavar='PATH', type=Path,
+                        help='Instructor repo for rubric/guidance/config defaults.')
+    parser.add_argument('--output', metavar='DIR', type=Path,
+                        help='Output directory. Defaults to ./focus-feedback-TIMESTAMP/.')
+    parser.add_argument('--verbose', action='store_true',
+                        help='Print per-criterion AI call details.')
+
+    args = parser.parse_args()
+
+    if args.provider:
+        os.environ['AI_PROVIDER'] = args.provider
+
+    timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+    output_dir = args.output or Path(f'focus-feedback-{timestamp}')
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        repos = load_repo_paths(args.repos, args.repos_dir)
+    except Exception as e:
+        print(f'ERROR loading repos: {e}', file=sys.stderr)
+        sys.exit(1)
+
+    if not repos:
+        print('ERROR: No repos found.', file=sys.stderr)
+        sys.exit(1)
+
+    print(f'Found {len(repos)} repo(s).')
+
+    first_repo = repos[0]
+    instructor_repo = args.instructor_repo
+
+    try:
+        rubric, rubric_path = load_rubric(args.rubric, first_repo, instructor_repo)
+    except Exception as e:
+        print(f'ERROR: {e}', file=sys.stderr)
+        sys.exit(1)
+
+    criterion = find_criterion(rubric, args.criterion)
+    if criterion is None:
+        names = [c.get('name') for c in rubric.get('criteria', [])]
+        print(f'ERROR: Criterion "{args.criterion}" not found.', file=sys.stderr)
+        print(f'Available criteria: {", ".join(names)}', file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        guidance, guidance_path = load_guidance(args.guidance, first_repo, instructor_repo)
+    except Exception as e:
+        print(f'ERROR: {e}', file=sys.stderr)
+        sys.exit(1)
+
+    config = load_config(args.config, first_repo, instructor_repo)
+    provider_config_base = resolve_provider_config(config)
+    models = args.models or [provider_config_base['model']]
+
+    print(f'Criterion: {args.criterion}')
+    print(f'Models: {", ".join(models)}')
+    print(f'Rubric: {rubric_path}')
+    print(f'Guidance: {guidance_path}')
+    print()
+
+    all_results = []
+    for repo in repos:
+        print(f'\n{"="*60}')
+        print(f'Repo: {repo.name}')
+        print(f'{"="*60}')
+
+        if args.rubric is None or args.guidance is None or args.config is None:
+            try:
+                r_rubric, _ = load_rubric(args.rubric, repo, instructor_repo)
+                r_criterion = find_criterion(r_rubric, args.criterion) or criterion
+                r_guidance, _ = load_guidance(args.guidance, repo, instructor_repo)
+                r_config = load_config(args.config, repo, instructor_repo)
+            except Exception:
+                r_criterion = criterion
+                r_guidance = guidance
+                r_config = config
+        else:
+            r_criterion = criterion
+            r_guidance = guidance
+            r_config = config
+
+        entry = run_focus_for_repo(
+            repo, r_criterion, r_guidance, r_config,
+            models=models,
+            provider_config_base=provider_config_base,
+            disable_json_mode=args.disable_json_mode,
+            verbose=args.verbose,
+        )
+        all_results.append(entry)
+
+    output_file = output_dir / f'focus-feedback-{timestamp}.md'
+    report_text = format_aggregated_report(
+        all_results,
+        criterion_name=args.criterion,
+        models=models,
+        rubric_path=rubric_path,
+        guidance_path=guidance_path,
+    )
+    output_file.write_text(report_text)
+
+    print(f'\n{"="*60}')
+    print(f'Done. Report saved to: {output_file}')
+    print(f'{"="*60}')
 
 
 if __name__ == '__main__':

@@ -419,6 +419,31 @@ def test_run_focus_for_repo_analyze_exception(tmp_path, sample_parsed_report, sa
     assert 'API error' in entry['models']['gpt-4o']['error']
 
 
+import subprocess as _subprocess
+
+
+def test_help_exits_cleanly():
+    result = _subprocess.run(
+        [sys.executable, 'focus-feedback.py', '--help'],
+        capture_output=True, text=True,
+        cwd=str(Path(__file__).parent.parent),
+    )
+    assert result.returncode == 0
+    assert '--criterion' in result.stdout
+    assert '--models' in result.stdout
+    assert '--repos' in result.stdout
+    assert '--repos-dir' in result.stdout
+
+
+def test_missing_criterion_exits_with_error():
+    result = _subprocess.run(
+        [sys.executable, 'focus-feedback.py', '--repos-dir', '/tmp'],
+        capture_output=True, text=True,
+        cwd=str(Path(__file__).parent.parent),
+    )
+    assert result.returncode != 0
+
+
 def test_run_focus_for_repo_disable_json_mode(tmp_path, sample_parsed_report, sample_criterion):
     repo = tmp_path / 'student-1'
     repo.mkdir()
