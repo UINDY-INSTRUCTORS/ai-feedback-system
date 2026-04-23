@@ -8,6 +8,7 @@ Supports:
   - anthropic:     Anthropic Claude API (uses ANTHROPIC_API_KEY)
   - gemini:        Google Gemini API (uses GEMINI_API_KEY)
   - openai:        OpenAI directly (uses OPENAI_API_KEY)
+  - vertex:        Google Vertex AI (uses ADC via gcloud / GOOGLE_APPLICATION_CREDENTIALS)
 
 All providers return the same (text, response_data, request_payload) tuple.
 
@@ -16,6 +17,11 @@ Configuration priority:
   2. Global config file (~/.ai-feedback/config.yml)
   3. Per-repo .github/config.yml
   4. Defaults (github_models + gpt-4o)
+
+Vertex AI config:
+  project:  GCP project ID (GOOGLE_CLOUD_PROJECT env var or 'project' in config)
+  location: GCP region     (GOOGLE_CLOUD_LOCATION env var or 'location' in config, default: us-central1)
+  Auth is handled automatically via Application Default Credentials (run: gcloud auth application-default login)
 """
 
 import os
@@ -35,16 +41,17 @@ try:
 except ImportError:
     pass
 
-# Provider endpoint defaults
+# Provider endpoint defaults (vertex is computed dynamically from project/location)
 PROVIDER_ENDPOINTS = {
     'github_models': 'https://models.inference.ai.azure.com',
     'openrouter':    'https://openrouter.ai/api/v1',
     'openai':        'https://api.openai.com/v1',
     'anthropic':     'https://api.anthropic.com',
     'gemini':        'https://generativelanguage.googleapis.com',
+    'vertex':        None,
 }
 
-# Maps provider -> env var name for API key
+# Maps provider -> env var name for API key (vertex uses ADC, no key needed)
 PROVIDER_KEY_ENVVARS = {
     'github_models': 'GITHUB_TOKEN',
     'openrouter':    'OPENROUTER_API_KEY',
@@ -53,6 +60,9 @@ PROVIDER_KEY_ENVVARS = {
     'gemini':        'GEMINI_API_KEY',
 }
 
+# Providers that use ADC/service-account auth instead of an API key
+PROVIDERS_WITHOUT_API_KEY = {'vertex'}
+
 # Default models per provider
 PROVIDER_DEFAULT_MODELS = {
     'github_models': 'gpt-4o',
@@ -60,6 +70,7 @@ PROVIDER_DEFAULT_MODELS = {
     'openai':        'gpt-4o',
     'anthropic':     'claude-sonnet-4-20250514',
     'gemini':        'gemini-2.5-flash',
+    'vertex':        'google/gemini-2.5-flash-001',
 }
 
 GLOBAL_CONFIG_PATH = Path.home() / '.ai-feedback' / 'config.yml'
@@ -210,13 +221,39 @@ def resolve_provider_config(repo_config: dict = None, profile: str = None) -> di
         or global_config.get('api_key')
     )
 
+    # Vertex AI project and location (only used when provider == 'vertex')
+    vertex_project = (
+        os.environ.get('GOOGLE_CLOUD_PROJECT')
+        or profile_config.get('project')
+        or global_config.get('project')
+        or repo_config.get('project')
+    )
+    vertex_location = (
+        os.environ.get('GOOGLE_CLOUD_LOCATION')
+        or profile_config.get('location')
+        or global_config.get('location')
+        or repo_config.get('location')
+        or 'us-central1'
+    )
+
     # API base URL: env var > profile > global config > provider default
+    # For vertex, compute dynamically from project + location if not overridden
     api_base = (
         os.environ.get('AI_API_BASE')
         or profile_config.get('api_base')
         or global_config.get('api_base')
         or PROVIDER_ENDPOINTS.get(provider)
     )
+    if provider == 'vertex' and not api_base:
+        if not vertex_project:
+            raise ValueError(
+                "Vertex AI requires a GCP project. Set GOOGLE_CLOUD_PROJECT env var "
+                "or add 'project: your-project-id' to your profile in ~/.ai-feedback/config.yml"
+            )
+        api_base = (
+            f"https://{vertex_location}-aiplatform.googleapis.com/v1beta1"
+            f"/projects/{vertex_project}/locations/{vertex_location}/endpoints/openapi"
+        )
 
     # Disable JSON mode
     disable_json_mode = (
@@ -224,6 +261,16 @@ def resolve_provider_config(repo_config: dict = None, profile: str = None) -> di
         or profile_config.get('disable_json_mode', False)
         or global_config.get('disable_json_mode', False)
         or repo_config.get('disable_json_mode', False)
+    )
+
+    # Request timeout: env var > profile > global config > repo config > default
+    _timeout_env = os.environ.get('AI_REQUEST_TIMEOUT')
+    request_timeout = (
+        int(_timeout_env) if _timeout_env
+        else profile_config.get('request_timeout')
+        or global_config.get('request_timeout')
+        or repo_config.get('request_timeout')
+        or 240
     )
 
     return {
@@ -235,6 +282,9 @@ def resolve_provider_config(repo_config: dict = None, profile: str = None) -> di
         'api_key': api_key,
         'api_base': api_base,
         'disable_json_mode': disable_json_mode,
+        'request_timeout': request_timeout,
+        'vertex_project': vertex_project,
+        'vertex_location': vertex_location,
     }
 
 
@@ -491,6 +541,100 @@ def _call_gemini(
         raise last_error
 
 
+def _call_vertex(
+    messages: list,
+    model: str,
+    api_base: str,
+    config: dict,
+    json_mode: bool = True,
+    max_retries: int = 3,
+) -> Tuple[str, dict, dict]:
+    """
+    Call Vertex AI Model Garden via its OpenAI-compatible endpoint.
+    Auth uses Application Default Credentials (ADC) — run:
+        gcloud auth application-default login
+    """
+    try:
+        import google.auth
+        import google.auth.transport.requests
+    except ImportError:
+        raise ImportError(
+            "google-auth is required for Vertex AI. Install with: pip install google-auth"
+        )
+
+    endpoint = f"{api_base}/chat/completions"
+
+    credentials, _ = google.auth.default(
+        scopes=['https://www.googleapis.com/auth/cloud-platform']
+    )
+    auth_request = google.auth.transport.requests.Request()
+    credentials.refresh(auth_request)
+
+    def _get_headers():
+        if not credentials.valid:
+            credentials.refresh(auth_request)
+        return {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {credentials.token}",
+        }
+
+    payload = {
+        "model": model,
+        "messages": messages,
+        "temperature": 0.3,
+        "max_tokens": config.get('max_output_tokens', 2000),
+    }
+    if json_mode:
+        payload["response_format"] = {"type": "json_object"}
+
+    timeout = config.get('request_timeout', 240)
+    last_error = None
+
+    for attempt in range(max_retries):
+        try:
+            print(f"   Calling {model} via Vertex AI... (attempt {attempt + 1}/{max_retries})")
+            response = requests.post(endpoint, headers=_get_headers(), json=payload, timeout=timeout)
+            response.raise_for_status()
+
+            result = response.json()
+            msg = result['choices'][0]['message']
+            text = msg.get('content') or ''
+
+            usage = result.get('usage', {})
+            print(f"   Tokens: {usage.get('total_tokens', 0)} "
+                  f"(prompt: {usage.get('prompt_tokens', 0)}, "
+                  f"completion: {usage.get('completion_tokens', 0)})")
+
+            return text, result, payload
+
+        except requests.exceptions.HTTPError as e:
+            last_error = e
+            status = e.response.status_code
+            if status == 429 and attempt < max_retries - 1:
+                retry_after = e.response.headers.get('Retry-After')
+                wait = int(retry_after) if retry_after and retry_after.isdigit() else 2 ** attempt
+                print(f"   Rate limited (429). Waiting {wait}s...")
+                time.sleep(wait)
+                continue
+            elif status == 413 and attempt < max_retries - 1:
+                stripped = _strip_images_from_messages(messages)
+                if stripped:
+                    messages = stripped
+                    payload["messages"] = messages
+                    print(f"   Payload too large (413). Retrying without images...")
+                    continue
+                raise
+            elif status == 400 and 'response_format' in payload and attempt < max_retries - 1:
+                del payload['response_format']
+                print(f"   Bad request (400). Retrying without response_format...")
+                continue
+            else:
+                raise
+
+    if last_error:
+        raise last_error
+
+
 def _convert_message_to_anthropic(msg: dict) -> dict:
     """Convert an OpenAI-format message to Anthropic format."""
     role = msg['role']
@@ -602,7 +746,7 @@ def call_ai(
     api_key = provider_config['api_key']
     api_base = provider_config['api_base']
 
-    if not api_key:
+    if not api_key and provider not in PROVIDERS_WITHOUT_API_KEY:
         key_var = PROVIDER_KEY_ENVVARS.get(provider, 'AI_API_KEY')
         raise ValueError(
             f"No API key found for provider '{provider}'. "
@@ -611,6 +755,9 @@ def call_ai(
 
     session_id = os.environ.get('AI_SESSION_ID') or None
     disable_json_mode = provider_config.get('disable_json_mode', False)
+
+    # Provider config timeout takes precedence over repo config (already resolved through priority chain)
+    effective_config = {**config, 'request_timeout': provider_config['request_timeout']}
 
     def _call(m):
         if provider in ('github_models', 'openrouter', 'openai'):
@@ -621,7 +768,7 @@ def call_ai(
                     "X-Title": "AI Feedback System",
                 }
             return _call_openai_compatible(
-                messages, m, api_key, api_base, config,
+                messages, m, api_key, api_base, effective_config,
                 json_mode=json_mode, max_retries=max_retries,
                 extra_headers=extra_headers if extra_headers else None,
                 session_id=session_id,
@@ -629,12 +776,17 @@ def call_ai(
             )
         elif provider == 'anthropic':
             return _call_anthropic(
-                messages, m, api_key, api_base, config,
+                messages, m, api_key, api_base, effective_config,
                 json_mode=json_mode, max_retries=max_retries,
             )
         elif provider == 'gemini':
             return _call_gemini(
-                messages, m, api_key, api_base, config,
+                messages, m, api_key, api_base, effective_config,
+                json_mode=json_mode, max_retries=max_retries,
+            )
+        elif provider == 'vertex':
+            return _call_vertex(
+                messages, m, api_base, effective_config,
                 json_mode=json_mode, max_retries=max_retries,
             )
         else:
@@ -654,8 +806,13 @@ def print_provider_info(provider_config: dict):
     print(f"   Provider: {provider_config['provider']}")
     print(f"   Model:    {provider_config['model']}")
     print(f"   Base URL: {provider_config['api_base']}")
-    has_key = "set" if provider_config['api_key'] else "MISSING"
-    print(f"   API Key:  {has_key}")
+    if provider_config['provider'] == 'vertex':
+        print(f"   Project:  {provider_config.get('vertex_project', 'MISSING')}")
+        print(f"   Location: {provider_config.get('vertex_location', 'us-central1')}")
+        print(f"   Auth:     ADC (gcloud application-default)")
+    else:
+        has_key = "set" if provider_config['api_key'] else "MISSING"
+        print(f"   API Key:  {has_key}")
 
 
 def list_openai_compatible_models(api_base: str, api_key: str = None, timeout: int = 10) -> List[str]:

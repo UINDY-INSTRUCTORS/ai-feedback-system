@@ -449,7 +449,7 @@ def call_extraction_api(prompt: str, model: str, max_retries: int = 3) -> str:
     extractor_model = provider_config['extractor']
     extraction_config = {
         'max_output_tokens': 4000,
-        'request_timeout': 120,
+        'request_timeout': provider_config.get('request_timeout', 240),
     }
 
     text, result, payload = call_ai(
