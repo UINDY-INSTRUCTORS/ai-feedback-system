@@ -585,7 +585,6 @@ def main():
     parser.add_argument('--profile',
                        help='Named provider profile from ~/.ai-feedback/config.yml')
     parser.add_argument('--provider',
-                       choices=['github_models', 'openrouter', 'anthropic', 'gemini', 'openai'],
                        help='AI provider (overrides profile and global/repo config)')
     parser.add_argument('--model',
                        help='Model name (overrides global/repo config)')

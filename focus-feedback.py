@@ -320,7 +320,6 @@ def main():
     parser.add_argument('--profile', metavar='NAME',
                         help='Named provider profile from ~/.ai-feedback/config.yml.')
     parser.add_argument('--provider',
-                        choices=['github_models', 'openrouter', 'anthropic', 'gemini', 'openai'],
                         help='AI provider (overrides profile).')
     parser.add_argument('--disable-json-mode', action='store_true',
                         help='Skip JSON response format (for models that do not support it).')

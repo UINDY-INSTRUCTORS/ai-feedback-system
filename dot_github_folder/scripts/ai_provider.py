@@ -2,7 +2,7 @@
 """
 AI Provider abstraction for multi-provider support.
 
-Supports:
+Built-in providers (with sensible defaults):
   - github_models: GitHub Models API (default in Actions, uses GITHUB_TOKEN)
   - openrouter:    OpenRouter (OpenAI-compatible, uses OPENROUTER_API_KEY)
   - anthropic:     Anthropic Claude API (uses ANTHROPIC_API_KEY)
@@ -10,10 +10,13 @@ Supports:
   - openai:        OpenAI directly (uses OPENAI_API_KEY)
   - vertex:        Google Vertex AI (uses ADC via gcloud / GOOGLE_APPLICATION_CREDENTIALS)
 
+Custom providers can be added in config without editing source — set 'provider' to any name
+and set 'api' to one of the supported protocols: openai, anthropic, gemini, vertex.
+
 All providers return the same (text, response_data, request_payload) tuple.
 
 Configuration priority:
-  1. Environment variables (AI_PROVIDER, AI_MODEL, etc.)
+  1. Environment variables (AI_PROVIDER, AI_MODEL, AI_API, etc.)
   2. Global config file (~/.ai-feedback/config.yml)
   3. Per-repo .github/config.yml
   4. Defaults (github_models + gpt-4o)
@@ -51,7 +54,7 @@ PROVIDER_ENDPOINTS = {
     'vertex':        None,
 }
 
-# Maps provider -> env var name for API key (vertex uses ADC, no key needed)
+# Maps known provider name -> env var for API key
 PROVIDER_KEY_ENVVARS = {
     'github_models': 'GITHUB_TOKEN',
     'openrouter':    'OPENROUTER_API_KEY',
@@ -60,8 +63,25 @@ PROVIDER_KEY_ENVVARS = {
     'gemini':        'GEMINI_API_KEY',
 }
 
-# Providers that use ADC/service-account auth instead of an API key
-PROVIDERS_WITHOUT_API_KEY = {'vertex'}
+# Maps api protocol -> default env var for API key (fallback for unknown provider names)
+API_KEY_ENVVARS = {
+    'openai':     'OPENAI_API_KEY',
+    'anthropic':  'ANTHROPIC_API_KEY',
+    'gemini':     'GEMINI_API_KEY',
+}
+
+# APIs that use ADC/service-account auth instead of an API key
+APIS_WITHOUT_API_KEY = {'vertex'}
+
+# Default api protocol per known provider name
+PROVIDER_DEFAULT_API = {
+    'github_models': 'openai',
+    'openrouter':    'openai',
+    'openai':        'openai',
+    'anthropic':     'anthropic',
+    'gemini':        'gemini',
+    'vertex':        'vertex',
+}
 
 # Default models per provider
 PROVIDER_DEFAULT_MODELS = {
@@ -177,6 +197,15 @@ def resolve_provider_config(repo_config: dict = None, profile: str = None) -> di
         or 'github_models'
     )
 
+    # API protocol: env var > profile > global config > repo config > inferred from provider
+    api = (
+        os.environ.get('AI_API')
+        or profile_config.get('api')
+        or global_config.get('api')
+        or repo_config.get('api')
+        or PROVIDER_DEFAULT_API.get(provider, 'openai')
+    )
+
     # Model names: env var > profile > global config > repo config > provider default
     repo_model = repo_config.get('model', {})
     global_model = global_config.get('model', {})
@@ -212,16 +241,16 @@ def resolve_provider_config(repo_config: dict = None, profile: str = None) -> di
         or fallback
     )
 
-    # API key: env var > profile > global config
-    key_envvar = PROVIDER_KEY_ENVVARS.get(provider, 'GITHUB_TOKEN')
+    # API key: env var (provider-specific) > env var (api-based) > AI_API_KEY > config
+    key_envvar = PROVIDER_KEY_ENVVARS.get(provider) or API_KEY_ENVVARS.get(api)
     api_key = (
-        os.environ.get(key_envvar)
+        (os.environ.get(key_envvar) if key_envvar else None)
         or os.environ.get('AI_API_KEY')
         or profile_config.get('api_key')
         or global_config.get('api_key')
     )
 
-    # Vertex AI project and location (only used when provider == 'vertex')
+    # Vertex AI project and location (only used when api == 'vertex')
     vertex_project = (
         os.environ.get('GOOGLE_CLOUD_PROJECT')
         or profile_config.get('project')
@@ -237,14 +266,14 @@ def resolve_provider_config(repo_config: dict = None, profile: str = None) -> di
     )
 
     # API base URL: env var > profile > global config > provider default
-    # For vertex, compute dynamically from project + location if not overridden
+    # For vertex api, compute dynamically from project + location if not overridden
     api_base = (
         os.environ.get('AI_API_BASE')
         or profile_config.get('api_base')
         or global_config.get('api_base')
         or PROVIDER_ENDPOINTS.get(provider)
     )
-    if provider == 'vertex' and not api_base:
+    if api == 'vertex' and not api_base:
         if not vertex_project:
             raise ValueError(
                 "Vertex AI requires a GCP project. Set GOOGLE_CLOUD_PROJECT env var "
@@ -275,6 +304,7 @@ def resolve_provider_config(repo_config: dict = None, profile: str = None) -> di
 
     return {
         'provider': provider,
+        'api': api,
         'model': model,
         'fallback': fallback,
         'extractor': extractor,
@@ -743,13 +773,14 @@ def call_ai(
         provider_config = resolve_provider_config(config)
 
     provider = provider_config['provider']
+    api = provider_config['api']
     api_key = provider_config['api_key']
     api_base = provider_config['api_base']
 
-    if not api_key and provider not in PROVIDERS_WITHOUT_API_KEY:
-        key_var = PROVIDER_KEY_ENVVARS.get(provider, 'AI_API_KEY')
+    if not api_key and api not in APIS_WITHOUT_API_KEY:
+        key_var = PROVIDER_KEY_ENVVARS.get(provider) or API_KEY_ENVVARS.get(api, 'AI_API_KEY')
         raise ValueError(
-            f"No API key found for provider '{provider}'. "
+            f"No API key found for provider '{provider}' (api: {api}). "
             f"Set {key_var} environment variable, or add api_key to ~/.ai-feedback/config.yml"
         )
 
@@ -760,7 +791,7 @@ def call_ai(
     effective_config = {**config, 'request_timeout': provider_config['request_timeout']}
 
     def _call(m):
-        if provider in ('github_models', 'openrouter', 'openai'):
+        if api == 'openai':
             extra_headers = {}
             if provider == 'openrouter':
                 extra_headers = {
@@ -774,23 +805,23 @@ def call_ai(
                 session_id=session_id,
                 disable_json_mode=disable_json_mode,
             )
-        elif provider == 'anthropic':
+        elif api == 'anthropic':
             return _call_anthropic(
                 messages, m, api_key, api_base, effective_config,
                 json_mode=json_mode, max_retries=max_retries,
             )
-        elif provider == 'gemini':
+        elif api == 'gemini':
             return _call_gemini(
                 messages, m, api_key, api_base, effective_config,
                 json_mode=json_mode, max_retries=max_retries,
             )
-        elif provider == 'vertex':
+        elif api == 'vertex':
             return _call_vertex(
                 messages, m, api_base, effective_config,
                 json_mode=json_mode, max_retries=max_retries,
             )
         else:
-            raise ValueError(f"Unknown provider: {provider}. Supported: {', '.join(PROVIDER_ENDPOINTS.keys())}")
+            raise ValueError(f"Unknown api: '{api}' for provider '{provider}'. Supported apis: openai, anthropic, gemini, vertex")
 
     try:
         return _call(model)
@@ -804,9 +835,10 @@ def call_ai(
 def print_provider_info(provider_config: dict):
     """Print resolved provider info for debugging."""
     print(f"   Provider: {provider_config['provider']}")
+    print(f"   API:      {provider_config['api']}")
     print(f"   Model:    {provider_config['model']}")
     print(f"   Base URL: {provider_config['api_base']}")
-    if provider_config['provider'] == 'vertex':
+    if provider_config['api'] == 'vertex':
         print(f"   Project:  {provider_config.get('vertex_project', 'MISSING')}")
         print(f"   Location: {provider_config.get('vertex_location', 'us-central1')}")
         print(f"   Auth:     ADC (gcloud application-default)")

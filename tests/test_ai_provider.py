@@ -27,6 +27,7 @@ from ai_provider import (
     print_provider_info,
     PROVIDER_ENDPOINTS,
     PROVIDER_DEFAULT_MODELS,
+    PROVIDER_DEFAULT_API,
     PROVIDER_KEY_ENVVARS,
 )
 
@@ -116,7 +117,10 @@ class TestResolveProviderConfig:
     def test_default_model_per_provider(self, mock_global):
         """Each provider has its own default model."""
         for provider, expected_model in PROVIDER_DEFAULT_MODELS.items():
-            with patch.dict('os.environ', {'AI_PROVIDER': provider}, clear=True):
+            env = {'AI_PROVIDER': provider}
+            if provider == 'vertex':
+                env['GOOGLE_CLOUD_PROJECT'] = 'test-proj'
+            with patch.dict('os.environ', env, clear=True):
                 result = resolve_provider_config()
             assert result['model'] == expected_model, f"Wrong default model for {provider}"
 
@@ -276,14 +280,17 @@ class TestStripImagesFromMessages:
 class TestCallAiRouting:
     """Tests that call_ai routes to the correct provider backend."""
 
-    def _make_provider_config(self, provider, api_key='test-key'):
+    def _make_provider_config(self, provider, api_key='test-key', api=None):
         return {
             'provider': provider,
+            'api': api or PROVIDER_DEFAULT_API.get(provider, 'openai'),
             'model': 'test-model',
             'api_key': api_key,
             'api_base': PROVIDER_ENDPOINTS.get(provider, 'https://example.com'),
             'fallback': 'test-model',
             'extractor': 'test-model',
+            'request_timeout': 60,
+            'disable_json_mode': False,
         }
 
     def test_raises_without_api_key(self):
@@ -335,10 +342,10 @@ class TestCallAiRouting:
         call_ai([{"role": "user", "content": "hi"}], "gemini", {}, provider_config=cfg)
         mock_fn.assert_called_once()
 
-    def test_unknown_provider_raises(self):
-        """Unknown provider raises ValueError."""
-        cfg = self._make_provider_config('unknown_provider')
-        with pytest.raises(ValueError, match="Unknown provider"):
+    def test_unknown_api_raises(self):
+        """Unknown api raises ValueError."""
+        cfg = self._make_provider_config('openai', api='unknown_api')
+        with pytest.raises(ValueError, match="Unknown api"):
             call_ai([{"role": "user", "content": "hi"}], "m", {}, provider_config=cfg)
 
 
@@ -353,6 +360,7 @@ class TestPrintProviderInfo:
     def test_prints_without_error(self, capsys):
         cfg = {
             'provider': 'openai',
+            'api': 'openai',
             'model': 'gpt-4o',
             'api_base': 'https://api.openai.com/v1',
             'api_key': 'sk-test',
@@ -366,6 +374,7 @@ class TestPrintProviderInfo:
     def test_prints_missing_key(self, capsys):
         cfg = {
             'provider': 'openai',
+            'api': 'openai',
             'model': 'gpt-4o',
             'api_base': 'https://api.openai.com/v1',
             'api_key': None,
