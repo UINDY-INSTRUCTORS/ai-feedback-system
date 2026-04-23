@@ -90,7 +90,7 @@ PROVIDER_DEFAULT_MODELS = {
     'openai':        'gpt-4o',
     'anthropic':     'claude-sonnet-4-20250514',
     'gemini':        'gemini-2.5-flash',
-    'vertex':        'google/gemini-2.5-flash-001',
+    'vertex':        'google/gemini-2.5-flash',
 }
 
 GLOBAL_CONFIG_PATH = Path.home() / '.ai-feedback' / 'config.yml'
