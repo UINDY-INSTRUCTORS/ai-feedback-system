@@ -515,9 +515,16 @@ def main():
         print(f"🐛 Combined feedback saved to debug: {debug_feedback_file.name}")
 
     end_time = datetime.now().timestamp()
+    failed = [r for r in all_feedback_json if not r.get('success')]
     print(f"\n📊 Total tokens: {total_tokens}")
-    print(f"✅ {len(all_feedback_json)} criteria analyzed")
+    if failed:
+        print(f"⚠️  {len(failed)}/{len(all_feedback_json)} criteria failed: "
+              f"{', '.join(r['criterion'] for r in failed)}")
+    else:
+        print(f"✅ {len(all_feedback_json)} criteria analyzed")
     print(f"⏱️  Total time: {round(end_time - start_time, 2)}s")
+    if failed:
+        sys.exit(1)
 
 
 if __name__ == '__main__':
