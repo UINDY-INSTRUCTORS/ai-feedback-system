@@ -186,7 +186,12 @@ comparing how different models score the same criterion across a cohort.
 uv run focus-feedback.py --repos-dir ~/course/submissions \
     --criterion "Results"
 
-# Compare models from different providers on the same criterion
+# Compare named profiles (uses each profile's configured primary model)
+uv run focus-feedback.py --repos-dir ~/course/submissions \
+    --criterion "Results" \
+    --profiles vertex-gemini anthropic
+
+# Compare specific models across providers (model@profile syntax)
 uv run focus-feedback.py --repos-dir ~/course/submissions \
     --criterion "Results" \
     --models google/gemini-2.5-flash@vertex-gemini \
@@ -194,7 +199,12 @@ uv run focus-feedback.py --repos-dir ~/course/submissions \
 ```
 
 Key options: `--repos` (file), `--repos-dir`, `--criterion` (required),
-`--models`, `--profile`, `--output`, `--verbose`.
+`--profiles`, `--models`, `--profile`, `--output`, `--verbose`.
+
+`--profiles` and `--models` are mutually exclusive. Use `--profiles` when you
+want to compare your named provider configs head-to-head; use `--models` when
+you want to pin specific model IDs (optionally with an `@profile` suffix for
+cross-provider comparisons).
 
 ---
 

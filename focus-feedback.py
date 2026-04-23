@@ -24,6 +24,10 @@ Usage:
         --models google/gemini-2.5-flash@vertex-gemini \\
                  google/gemma-4-26b-a4b-it-maas@vertex-gemma4 \\
                  claude-haiku-4-5@anthropic
+
+    # Profiles: use each profile's configured primary model
+    python focus-feedback.py --repos repos.txt --criterion "Results" \\
+        --profiles vertex-gemini anthropic
 """
 
 import copy
@@ -282,14 +286,16 @@ def run_focus_for_repo(repo: Path, criterion: dict, guidance: str, config: dict,
                        disable_json_mode: bool = False,
                        verbose: bool = False) -> dict:
     """
-    model_configs: list of (model_id, provider_config) pairs.
+    model_configs: list of (display_key, provider_config) pairs.
+    provider_config['model'] must already be set to the model to call.
+    display_key is used as the column label and result dict key.
     """
-    model_ids = [m for m, _ in model_configs]
+    display_keys = [k for k, _ in model_configs]
     try:
         report = load_parsed_report(repo)
     except Exception as e:
         error = {'success': False, 'error': str(e)}
-        return {'repo': repo.name, 'models': {m: error for m in model_ids}}
+        return {'repo': repo.name, 'models': {k: error for k in display_keys}}
 
     model_results = {}
     original_cwd = Path.cwd()
@@ -297,19 +303,20 @@ def run_focus_for_repo(repo: Path, criterion: dict, guidance: str, config: dict,
         os.chdir(repo)
         if disable_json_mode:
             os.environ['AI_DISABLE_JSON_MODE'] = 'true'
-        for model_id, provider_config in model_configs:
+        for display_key, provider_config in model_configs:
             if verbose:
-                print(f'\n  [{repo.name}] Model: {model_id}')
+                actual = provider_config.get('model', '')
+                label = f'{display_key} ({actual})' if display_key != actual else display_key
+                print(f'\n  [{repo.name}] {label}')
             pc = copy.deepcopy(provider_config)
-            pc['model'] = model_id
             try:
                 result = analyze_criterion(
                     report, criterion, guidance, config,
                     criterion_index=0, provider_config=pc,
                 )
-                model_results[model_id] = result
+                model_results[display_key] = result
             except Exception as e:
-                model_results[model_id] = {'success': False, 'error': str(e)}
+                model_results[display_key] = {'success': False, 'error': str(e)}
     finally:
         os.chdir(original_cwd)
         if disable_json_mode:
@@ -333,10 +340,19 @@ def main():
 
     parser.add_argument('--criterion', required=True,
                         help='Criterion name to evaluate (must match a criterion in rubric.yml).')
-    parser.add_argument('--models', nargs='+', metavar='MODEL',
-                        help='One or more model IDs to compare. Defaults to configured primary model.')
+
+    model_group = parser.add_mutually_exclusive_group()
+    model_group.add_argument('--models', nargs='+', metavar='MODEL',
+                             help='One or more model IDs to compare. Append @profile to specify '
+                                  'per-model provider (e.g. gpt-4o@openai). '
+                                  'Defaults to the configured primary model.')
+    model_group.add_argument('--profiles', nargs='+', metavar='PROFILE',
+                             help='One or more named profiles to compare. Each profile\'s '
+                                  'configured primary model is used; profile names become '
+                                  'the column labels in the report.')
+
     parser.add_argument('--profile', metavar='NAME',
-                        help='Named provider profile from ~/.ai-feedback/config.yml.')
+                        help='Default provider profile from ~/.ai-feedback/config.yml.')
     parser.add_argument('--provider',
                         help='AI provider (overrides profile).')
     parser.add_argument('--disable-json-mode', action='store_true',
@@ -411,13 +427,29 @@ def main():
         print(f'ERROR: {e}', file=sys.stderr)
         sys.exit(1)
 
-    raw_models = args.models or [default_pc['model']]
-    model_specs = [parse_model_spec(s, args.profile) for s in raw_models]
-    model_configs = [(m, get_provider_config(p)) for m, p in model_specs]
-    models = [m for m, _ in model_specs]
+    if args.profiles:
+        model_configs = []
+        for prof in args.profiles:
+            pc = copy.deepcopy(get_provider_config(prof))
+            model_configs.append((prof, pc))
+    elif args.models:
+        model_configs = []
+        for spec in args.models:
+            model_id, prof = parse_model_spec(spec, args.profile)
+            pc = copy.deepcopy(get_provider_config(prof))
+            pc['model'] = model_id
+            model_configs.append((model_id, pc))
+    else:
+        model_configs = [(default_pc['model'], copy.deepcopy(default_pc))]
+
+    display_keys = [k for k, _ in model_configs]
 
     print(f'Criterion: {args.criterion}')
-    print(f'Models: {", ".join(f"{m}[{p}]" if p else m for m, p in model_specs)}')
+    summary_parts = []
+    for key, pc in model_configs:
+        actual = pc.get('model', '')
+        summary_parts.append(f'{key} ({actual})' if key != actual else key)
+    print(f'Models: {", ".join(summary_parts)}')
     print(f'Rubric: {rubric_path}')
     print(f'Guidance: {guidance_path}')
     print()
@@ -455,7 +487,7 @@ def main():
     report_text = format_aggregated_report(
         all_results,
         criterion_name=args.criterion,
-        models=models,
+        models=display_keys,
         rubric_path=rubric_path,
         guidance_path=guidance_path,
     )
