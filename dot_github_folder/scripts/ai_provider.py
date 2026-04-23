@@ -614,8 +614,7 @@ def _call_vertex(
         "temperature": 0.3,
         "max_tokens": config.get('max_output_tokens', 2000),
     }
-    if json_mode:
-        payload["response_format"] = {"type": "json_object"}
+    # Vertex AI does not support response_format; JSON is requested via prompt only
 
     timeout = config.get('request_timeout', 240)
     last_error = None
