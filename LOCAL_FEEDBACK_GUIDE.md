@@ -147,6 +147,82 @@ Each feedback output is a Markdown file containing:
 | Figures| 5     |
 ```
 
+## Local Analysis Tools
+
+Three scripts support local feedback work. All accept `--profile` to select a
+provider from `~/.ai-feedback/config.yml`, and model specs support an
+`@profile` suffix for cross-provider comparisons.
+
+### `run-local-feedback.py` — Single or batch feedback generation
+
+Runs the full feedback pipeline (render → parse → AI → save) for one repo or
+an entire directory of repos. This is the everyday driver for generating
+`feedback-output.md` files you can review before pushing to GitHub.
+
+```bash
+# Single repo
+uv run run-local-feedback.py /path/to/repo --profile vertex-gemini
+
+# Batch — every subdirectory that contains index.qmd
+uv run run-local-feedback.py ~/course/submissions --batch --profile anthropic
+
+# Skip re-rendering if output already exists
+uv run run-local-feedback.py /path/to/repo --no-render --profile vertex-gemini
+```
+
+Key options: `--no-render`, `--batch`, `--profile`, `--provider`, `--model`,
+`--scoring` / `--no-scoring`, `--verbose`.
+
+---
+
+### `focus-feedback.py` — One criterion, many repos, many models
+
+Runs a **single criterion** across an arbitrary list of repos and produces an
+aggregated comparison report. Useful for calibrating rubric language or
+comparing how different models score the same criterion across a cohort.
+
+```bash
+# Evaluate "Results" across all repos in a directory
+uv run focus-feedback.py --repos-dir ~/course/submissions \
+    --criterion "Results"
+
+# Compare models from different providers on the same criterion
+uv run focus-feedback.py --repos-dir ~/course/submissions \
+    --criterion "Results" \
+    --models google/gemini-2.5-flash@vertex-gemini \
+             claude-haiku-4-5@anthropic
+```
+
+Key options: `--repos` (file), `--repos-dir`, `--criterion` (required),
+`--models`, `--profile`, `--output`, `--verbose`.
+
+---
+
+### `compare_feedback.py` — Many models, one repo, all criteria
+
+Runs **all criteria** for a single repo with multiple models side-by-side and
+writes a comparison document. Optionally uses an LLM judge to score each
+model's feedback on Accuracy, Specificity, and Actionability.
+
+```bash
+# Compare two Vertex models on one student's repo
+uv run compare_feedback.py /path/to/repo \
+    --models google/gemini-2.5-flash@vertex-gemini \
+             google/gemma-4-26b-a4b-it-maas@vertex-gemma4
+
+# Add an LLM judge from a different provider
+uv run compare_feedback.py /path/to/repo \
+    --models google/gemini-2.5-flash@vertex-gemini \
+             claude-haiku-4-5@anthropic \
+    --judge claude-sonnet-4-6@anthropic \
+    --output-dir ./comparison-results
+```
+
+Key options: `--models`, `--judge`, `--profile`, `--scoring`,
+`--output-dir`, `--skip-extraction`.
+
+---
+
 ## Workflow Examples
 
 ### Example 1: Quick Local Test

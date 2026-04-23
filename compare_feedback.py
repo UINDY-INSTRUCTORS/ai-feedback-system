@@ -11,6 +11,13 @@ Usage:
     python compare_feedback.py /path/to/repo --models meta-llama/llama-4-scout google/gemini-2.0-flash-001
     python compare_feedback.py /path/to/repo --judge meta-llama/llama-4-maverick
     python compare_feedback.py /path/to/repo --output-dir ./comparison-results
+
+    # Cross-profile: append @profile to any model spec
+    python compare_feedback.py /path/to/repo \\
+        --models google/gemini-2.5-flash@vertex-gemini \\
+                 google/gemma-4-26b-a4b-it-maas@vertex-gemma4 \\
+                 claude-haiku-4-5@anthropic
+    python compare_feedback.py /path/to/repo --judge claude-haiku-4-5@anthropic
 """
 
 import argparse
@@ -35,6 +42,18 @@ DEFAULT_MODELS = [
 ]
 
 DEFAULT_EXTRACTOR = 'meta-llama/llama-4-scout'
+
+
+# ---------------------------------------------------------------------------
+# Model spec parsing  (model_id  or  model_id@profile)
+# ---------------------------------------------------------------------------
+
+def parse_model_spec(spec: str, default_profile: str = None):
+    """Return (model_id, profile_name) from 'model' or 'model@profile'."""
+    if '@' in spec:
+        model_id, profile = spec.rsplit('@', 1)
+        return model_id, profile
+    return spec, default_profile
 
 
 # ---------------------------------------------------------------------------
@@ -524,7 +543,10 @@ def main():
                         help='Model to use as LLM judge (optional, e.g. meta-llama/llama-4-maverick)')
     parser.add_argument('--scoring', action='store_true',
                         help='Enable numerical scoring')
-    parser.add_argument('--provider', default='openrouter')
+    parser.add_argument('--profile',
+                        help='Named provider profile from ~/.ai-feedback/config.yml')
+    parser.add_argument('--provider',
+                        help='AI provider (overrides profile)')
     parser.add_argument('--session-id',
                         help='OpenRouter session_id for grouping calls in logs')
     parser.add_argument('--output-dir', default='.',
@@ -561,19 +583,28 @@ def main():
             print("❌ No criteria in rubric")
             sys.exit(1)
 
-        os.environ['AI_PROVIDER'] = args.provider
+        if args.profile:
+            os.environ['AI_PROFILE'] = args.profile
+        if args.provider:
+            os.environ['AI_PROVIDER'] = args.provider
         os.environ['AI_EXTRACTOR_MODEL'] = args.extractor
         os.environ['AI_EXTRACTOR_FALLBACK_MODEL'] = args.extractor_fallback
         if args.session_id:
             os.environ['AI_SESSION_ID'] = args.session_id
         if args.scoring:
             os.environ['SCORING_ENABLED'] = 'true'
-        provider_config = resolve_provider_config(config)
 
-        api_key = provider_config.get('api_key')
-        if not api_key:
-            print(f"❌ No API key for '{args.provider}'")
-            sys.exit(1)
+        # Parse model specs and resolve a provider_config per unique profile
+        model_specs = [parse_model_spec(s, args.profile) for s in args.models]
+        judge_spec  = parse_model_spec(args.judge, args.profile) if args.judge else None
+
+        _config_cache = {}
+        def get_provider_config(profile_name):
+            if profile_name not in _config_cache:
+                _config_cache[profile_name] = resolve_provider_config(config, profile=profile_name)
+            return _config_cache[profile_name]
+
+        provider_config = get_provider_config(args.profile)
 
         # ── Extract prompts (or load from cache) ─────────────────────────
         prompts_cache = (output_dir / 'criterion_prompts.json').resolve()
@@ -611,10 +642,12 @@ def main():
 
         # ── Run each model ────────────────────────────────────────────────
         all_results = {}
-        for model_id in args.models:
-            print(f"\n── {model_id}")
+        for model_id, profile_name in model_specs:
+            label = f"{model_id}  [{profile_name}]" if profile_name else model_id
+            print(f"\n── {label}")
             all_results[model_id] = run_model(
-                model_id, criterion_messages, config, provider_config)
+                model_id, criterion_messages, config,
+                get_provider_config(profile_name))
 
             # Save this model's feedback.json
             safe_name = model_short(model_id)
@@ -623,11 +656,14 @@ def main():
                 json.dump(all_results[model_id], f, indent=2)
 
         # ── LLM judge ────────────────────────────────────────────────────
+        model_ids = [m for m, _ in model_specs]
         judge_scores = {}
-        if args.judge:
-            print(f"\n── LLM Judge: {args.judge}")
-            judge_scores['_judge_model'] = model_short(args.judge)
-            for model_id in args.models:
+        if judge_spec:
+            judge_model_id, judge_profile = judge_spec
+            print(f"\n── LLM Judge: {judge_model_id}  [{judge_profile}]" if judge_profile else f"\n── LLM Judge: {judge_model_id}")
+            judge_scores['_judge_model'] = model_short(judge_model_id)
+            judge_pc = get_provider_config(judge_profile)
+            for model_id in model_ids:
                 judge_scores[model_id] = {}
                 for criterion in criteria:
                     name = criterion['name']
@@ -645,9 +681,9 @@ def main():
                         criterion_contexts.get(name, ''),
                         model_id,
                         r['feedback'],
-                        args.judge,
+                        judge_model_id,
                         config,
-                        provider_config,
+                        judge_pc,
                     )
                     judge_scores[model_id][name] = scores
                     acc = scores.get('accuracy', '?')
@@ -658,11 +694,11 @@ def main():
 
         # ── Write comparison document and judge briefing ─────────────────
         doc_path = (output_dir / f'comparison-{repo_path.name}.md').resolve()
-        write_comparison_doc(doc_path, repo_path.name, args.models,
+        write_comparison_doc(doc_path, repo_path.name, model_ids,
                              criteria, all_results, judge_scores, args.scoring)
 
         briefing_path = (output_dir / f'judge-briefing-{repo_path.name}.md').resolve()
-        write_judge_briefing(briefing_path, repo_path.name, args.models,
+        write_judge_briefing(briefing_path, repo_path.name, model_ids,
                              criteria, all_results, criterion_contexts)
 
         # ── Print summary ─────────────────────────────────────────────────
@@ -675,7 +711,7 @@ def main():
         print(header)
         print('-' * len(header))
 
-        for model_id in args.models:
+        for model_id in model_ids:
             results = all_results.get(model_id, {})
             ok = sum(1 for r in results.values() if r.get('success'))
             n = len(criteria)
@@ -689,9 +725,9 @@ def main():
             print(row)
 
         if judge_scores and '_judge_model' not in judge_scores or True:
-            if args.judge:
+            if judge_spec:
                 print(f"\nJudge averages (acc/spe/act):")
-                for model_id in args.models:
+                for model_id in model_ids:
                     scores_list = [s for s in judge_scores.get(model_id, {}).values()
                                    if s.get('accuracy') is not None]
                     if scores_list:

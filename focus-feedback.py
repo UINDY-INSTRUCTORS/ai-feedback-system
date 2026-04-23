@@ -18,6 +18,12 @@ Usage:
     # Multiple models:
     python focus-feedback.py --repos repos.txt --criterion "Results" \\
         --models gpt-4o meta-llama/llama-4-scout --provider openrouter
+
+    # Cross-profile: append @profile to any model spec
+    python focus-feedback.py --repos repos.txt --criterion "Results" \\
+        --models google/gemini-2.5-flash@vertex-gemini \\
+                 google/gemma-4-26b-a4b-it-maas@vertex-gemma4 \\
+                 claude-haiku-4-5@anthropic
 """
 
 import copy
@@ -36,6 +42,14 @@ sys.path.insert(0, str(SCRIPT_DIR))
 
 from ai_feedback_criterion import analyze_criterion
 from ai_provider import resolve_provider_config
+
+
+def parse_model_spec(spec: str, default_profile: str = None):
+    """Return (model_id, profile_name) from 'model' or 'model@profile'."""
+    if '@' in spec:
+        model_id, profile = spec.rsplit('@', 1)
+        return model_id, profile
+    return spec, default_profile
 
 MINIMAL_CONFIG = {
     'feedback': {'scoring_enabled': False},
@@ -264,14 +278,18 @@ def format_aggregated_report(repo_results: list, criterion_name: str, models: li
 
 
 def run_focus_for_repo(repo: Path, criterion: dict, guidance: str, config: dict,
-                       models: list, provider_config_base: dict,
+                       model_configs: list,
                        disable_json_mode: bool = False,
                        verbose: bool = False) -> dict:
+    """
+    model_configs: list of (model_id, provider_config) pairs.
+    """
+    model_ids = [m for m, _ in model_configs]
     try:
         report = load_parsed_report(repo)
     except Exception as e:
         error = {'success': False, 'error': str(e)}
-        return {'repo': repo.name, 'models': {m: error for m in models}}
+        return {'repo': repo.name, 'models': {m: error for m in model_ids}}
 
     model_results = {}
     original_cwd = Path.cwd()
@@ -279,19 +297,19 @@ def run_focus_for_repo(repo: Path, criterion: dict, guidance: str, config: dict,
         os.chdir(repo)
         if disable_json_mode:
             os.environ['AI_DISABLE_JSON_MODE'] = 'true'
-        for model in models:
+        for model_id, provider_config in model_configs:
             if verbose:
-                print(f'\n  [{repo.name}] Model: {model}')
-            pc = copy.deepcopy(provider_config_base)
-            pc['model'] = model
+                print(f'\n  [{repo.name}] Model: {model_id}')
+            pc = copy.deepcopy(provider_config)
+            pc['model'] = model_id
             try:
                 result = analyze_criterion(
                     report, criterion, guidance, config,
                     criterion_index=0, provider_config=pc,
                 )
-                model_results[model] = result
+                model_results[model_id] = result
             except Exception as e:
-                model_results[model] = {'success': False, 'error': str(e)}
+                model_results[model_id] = {'success': False, 'error': str(e)}
     finally:
         os.chdir(original_cwd)
         if disable_json_mode:
@@ -338,6 +356,8 @@ def main():
 
     args = parser.parse_args()
 
+    if args.profile:
+        os.environ['AI_PROFILE'] = args.profile
     if args.provider:
         os.environ['AI_PROVIDER'] = args.provider
 
@@ -381,14 +401,23 @@ def main():
 
     try:
         config = load_config(args.config, first_repo, instructor_repo)
-        provider_config_base = resolve_provider_config(config, profile=args.profile)
+        _config_cache = {}
+        def get_provider_config(profile_name):
+            if profile_name not in _config_cache:
+                _config_cache[profile_name] = resolve_provider_config(config, profile=profile_name)
+            return _config_cache[profile_name]
+        default_pc = get_provider_config(args.profile)
     except Exception as e:
         print(f'ERROR: {e}', file=sys.stderr)
         sys.exit(1)
-    models = args.models or [provider_config_base['model']]
+
+    raw_models = args.models or [default_pc['model']]
+    model_specs = [parse_model_spec(s, args.profile) for s in raw_models]
+    model_configs = [(m, get_provider_config(p)) for m, p in model_specs]
+    models = [m for m, _ in model_specs]
 
     print(f'Criterion: {args.criterion}')
-    print(f'Models: {", ".join(models)}')
+    print(f'Models: {", ".join(f"{m}[{p}]" if p else m for m, p in model_specs)}')
     print(f'Rubric: {rubric_path}')
     print(f'Guidance: {guidance_path}')
     print()
@@ -416,8 +445,7 @@ def main():
 
         entry = run_focus_for_repo(
             repo, r_criterion, r_guidance, r_config,
-            models=models,
-            provider_config_base=provider_config_base,
+            model_configs=model_configs,
             disable_json_mode=args.disable_json_mode,
             verbose=args.verbose,
         )
