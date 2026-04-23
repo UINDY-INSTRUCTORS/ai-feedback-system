@@ -374,6 +374,14 @@ def _call_openai_compatible(
 
             return text, result, payload
 
+        except requests.exceptions.Timeout as e:
+            last_error = e
+            if attempt < max_retries - 1:
+                wait = 2 ** attempt + random.uniform(0, 2)
+                print(f"   Request timed out. Waiting {wait:.1f}s before retry...")
+                time.sleep(wait)
+                continue
+            raise
         except requests.exceptions.HTTPError as e:
             last_error = e
             status = e.response.status_code
@@ -474,6 +482,14 @@ def _call_anthropic(
 
             return text, result, payload
 
+        except requests.exceptions.Timeout as e:
+            last_error = e
+            if attempt < max_retries - 1:
+                wait = 2 ** attempt + random.uniform(0, 2)
+                print(f"   Request timed out. Waiting {wait:.1f}s before retry...")
+                time.sleep(wait)
+                continue
+            raise
         except requests.exceptions.HTTPError as e:
             last_error = e
             status = e.response.status_code
@@ -555,6 +571,14 @@ def _call_gemini(
 
             return text, result, payload
 
+        except requests.exceptions.Timeout as e:
+            last_error = e
+            if attempt < max_retries - 1:
+                wait = 2 ** attempt + random.uniform(0, 2)
+                print(f"   Request timed out. Waiting {wait:.1f}s before retry...")
+                time.sleep(wait)
+                continue
+            raise
         except requests.exceptions.HTTPError as e:
             last_error = e
             status = e.response.status_code
@@ -636,6 +660,14 @@ def _call_vertex(
 
             return text, result, payload
 
+        except requests.exceptions.Timeout as e:
+            last_error = e
+            if attempt < max_retries - 1:
+                wait = 2 ** attempt + random.uniform(0, 2)
+                print(f"   Request timed out. Waiting {wait:.1f}s before retry...")
+                time.sleep(wait)
+                continue
+            raise
         except requests.exceptions.HTTPError as e:
             last_error = e
             status = e.response.status_code
