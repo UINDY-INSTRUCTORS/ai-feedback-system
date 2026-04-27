@@ -45,7 +45,7 @@ SCRIPT_DIR = Path(__file__).parent / 'dot_github_folder' / 'scripts'
 sys.path.insert(0, str(SCRIPT_DIR))
 
 from ai_feedback_criterion import analyze_criterion
-from ai_provider import resolve_provider_config
+from ai_provider import resolve_provider_config, print_configured_profiles
 
 
 def parse_model_spec(spec: str, default_profile: str = None):
@@ -369,8 +369,14 @@ def main():
                         help='Output directory. Defaults to ./focus-feedback-TIMESTAMP/.')
     parser.add_argument('--verbose', action='store_true',
                         help='Print per-criterion AI call details.')
+    parser.add_argument('--list-profiles', action='store_true',
+                        help='List configured AI profiles and their models, then exit.')
 
     args = parser.parse_args()
+
+    if args.list_profiles:
+        print_configured_profiles(args.profile)
+        return
 
     if args.profile:
         os.environ['AI_PROFILE'] = args.profile

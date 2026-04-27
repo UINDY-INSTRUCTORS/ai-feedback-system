@@ -878,6 +878,64 @@ def print_provider_info(provider_config: dict):
         print(f"   API Key:  {has_key}")
 
 
+def print_configured_profiles(active_profile: str = None):
+    """Print all named profiles and defaults from ~/.ai-feedback/config.yml."""
+    global_config = load_global_config()
+    profiles = global_config.get('profiles', {})
+    default_profile = global_config.get('profile')
+
+    print(f"\nAI configuration  ({GLOBAL_CONFIG_PATH})\n")
+
+    top_provider = global_config.get('provider', 'github_models')
+    top_model_cfg = global_config.get('model', {})
+    top_model = (top_model_cfg.get('primary') if isinstance(top_model_cfg, dict) else top_model_cfg) \
+                or PROVIDER_DEFAULT_MODELS.get(top_provider, 'gpt-4o')
+    print(f"  Default (no profile): provider={top_provider}  model={top_model}")
+    if default_profile:
+        print(f"  Active profile:       {default_profile}")
+    print()
+
+    if not profiles:
+        print("  No named profiles configured.")
+        print(f"  To add profiles, edit {GLOBAL_CONFIG_PATH}")
+        print(f"  (or run: python run-local-feedback.py --init-config)")
+        print()
+        return
+
+    active = active_profile or os.environ.get('AI_PROFILE') or default_profile
+    source = ('--profile arg' if active_profile
+              else 'AI_PROFILE env var' if os.environ.get('AI_PROFILE')
+              else 'config default' if default_profile
+              else None)
+
+    col = {'name': 25, 'provider': 16, 'model': 42, 'fallback': 36}
+    hdr = (f"  {'Profile':<{col['name']}}  {'Provider':<{col['provider']}}"
+           f"  {'Primary model':<{col['model']}}  Fallback")
+    print(hdr)
+    print('  ' + '-' * (len(hdr) - 2))
+
+    for name, cfg in profiles.items():
+        cfg = cfg or {}
+        marker = '* ' if name == active else '  '
+        provider = cfg.get('provider', top_provider)
+        mcfg = cfg.get('model', {})
+        if isinstance(mcfg, dict):
+            model    = mcfg.get('primary')   or PROVIDER_DEFAULT_MODELS.get(provider, '?')
+            fallback = mcfg.get('fallback')  or model
+        else:
+            model = fallback = mcfg or PROVIDER_DEFAULT_MODELS.get(provider, '?')
+        fb_str = '' if fallback == model else fallback
+        print(f"  {marker}{name:<{col['name']}}  {provider:<{col['provider']}}"
+              f"  {model:<{col['model']}}  {fb_str}")
+
+    if active and source:
+        print(f"\n  (* = active via {source})")
+    print()
+    print("  Select with:  --profile <name>")
+    print("  Override with: --model <model-id>")
+    print()
+
+
 def list_openai_compatible_models(api_base: str, api_key: str = None, timeout: int = 10) -> List[str]:
     """
     Query an OpenAI-compatible endpoint for available models.

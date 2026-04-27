@@ -294,7 +294,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
-    parser.add_argument('repo', help='Path to student repo')
+    parser.add_argument('repo', nargs='?', help='Path to student repo')
     parser.add_argument('--models', nargs='+', default=DEFAULT_MODELS,
                         help='Models to benchmark (default: built-in list)')
     parser.add_argument('--criterion', type=int, default=0,
@@ -307,8 +307,10 @@ def main():
                         help='Class size for cost projection (default: 60)')
     parser.add_argument('--reports', type=int, default=11,
                         help='Reports per student for cost projection (default: 11)')
-    parser.add_argument('--provider', default='openrouter',
-                        help='Provider (default: openrouter)')
+    parser.add_argument('--profile',
+                        help='Named provider profile from ~/.ai-feedback/config.yml')
+    parser.add_argument('--provider',
+                        help='AI provider (overrides profile; default: openrouter)')
     parser.add_argument('--extractor', default='meta-llama/llama-4-scout',
                         help='Model to use for text extraction (default: meta-llama/llama-4-scout)')
     parser.add_argument('--session-id',
@@ -316,7 +318,17 @@ def main():
     parser.add_argument('--extractor-fallback', default='google/gemini-2.0-flash-001',
                         help='Fallback extractor model (default: google/gemini-2.0-flash-001)')
     parser.add_argument('--output', help='Save raw results to this JSON file')
+    parser.add_argument('--list-profiles', action='store_true',
+                        help='List configured AI profiles and their models, then exit')
     args = parser.parse_args()
+
+    if args.list_profiles:
+        from ai_provider import print_configured_profiles
+        print_configured_profiles(args.profile)
+        return
+
+    if not args.repo:
+        parser.error("the following arguments are required: repo")
 
     repo_path = Path(args.repo).resolve()
     if not (repo_path / 'index.qmd').exists():
@@ -344,12 +356,15 @@ def main():
             sys.exit(1)
 
         # Set provider and extractor via env so call_extraction_api picks them up
-        os.environ['AI_PROVIDER'] = args.provider
+        if args.profile:
+            os.environ['AI_PROFILE'] = args.profile
+        if args.provider:
+            os.environ['AI_PROVIDER'] = args.provider
         os.environ['AI_EXTRACTOR_MODEL'] = args.extractor
         os.environ['AI_EXTRACTOR_FALLBACK_MODEL'] = args.extractor_fallback
         if args.session_id:
             os.environ['AI_SESSION_ID'] = args.session_id
-        provider_config = resolve_provider_config(config)
+        provider_config = resolve_provider_config(config, profile=args.profile)
 
         api_key = provider_config.get('api_key')
         if not api_key:
@@ -357,7 +372,7 @@ def main():
             sys.exit(1)
 
         print("Fetching model pricing from OpenRouter...")
-        pricing = fetch_openrouter_pricing(api_key) if args.provider == 'openrouter' else {}
+        pricing = fetch_openrouter_pricing(api_key) if provider_config.get('provider') == 'openrouter' else {}
 
         test_criteria = criteria if args.all_criteria else [criteria[args.criterion]]
         print(f"\nBenchmarking {len(args.models)} models"

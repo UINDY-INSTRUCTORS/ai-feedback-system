@@ -592,6 +592,8 @@ def main():
                        help='Skip JSON response format (for models that don\'t support it)')
     parser.add_argument('--init-config', action='store_true',
                        help='Create default global config at ~/.ai-feedback/config.yml and exit')
+    parser.add_argument('--list-profiles', action='store_true',
+                       help='List configured AI profiles and their models, then exit')
 
     # Rendering options
     parser.add_argument('--docker', action='store_true',
@@ -624,6 +626,11 @@ def main():
     if args.init_config:
         from dot_github_folder.scripts.ai_provider import create_default_global_config
         create_default_global_config()
+        return
+
+    if args.list_profiles:
+        from dot_github_folder.scripts.ai_provider import print_configured_profiles
+        print_configured_profiles(args.profile)
         return
 
     if args.list_models:

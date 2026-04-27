@@ -532,7 +532,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
-    parser.add_argument('repo', help='Path to student repo')
+    parser.add_argument('repo', nargs='?', help='Path to student repo')
     parser.add_argument('--models', nargs='+', default=DEFAULT_MODELS,
                         help='Models to compare')
     parser.add_argument('--extractor', default=DEFAULT_EXTRACTOR,
@@ -553,7 +553,17 @@ def main():
                         help='Directory to save comparison output (default: .)')
     parser.add_argument('--skip-extraction', action='store_true',
                         help='Reuse cached prompts from a previous run (saved in output-dir)')
+    parser.add_argument('--list-profiles', action='store_true',
+                        help='List configured AI profiles and their models, then exit')
     args = parser.parse_args()
+
+    if args.list_profiles:
+        from ai_provider import print_configured_profiles
+        print_configured_profiles(args.profile)
+        return
+
+    if not args.repo:
+        parser.error("the following arguments are required: repo")
 
     repo_path = Path(args.repo).resolve()
     if not (repo_path / 'index.qmd').exists():
