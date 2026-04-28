@@ -2,7 +2,9 @@
 """
 Generic Quarto/Markdown report parser.
 Extracts content, structure, and a detailed map of figures for AI analysis.
-Also extracts notebook cell outputs (tables, text, markdown, latex).
+
+Tries rendered HTML output first (output/index.html or index.html); falls back
+to parsing the .qmd source directly if HTML is not available.
 """
 
 import json
@@ -10,6 +12,7 @@ import yaml
 import re
 import sys
 from pathlib import Path
+from typing import Optional
 from html_to_markdown import convert_notebook_output_to_markdown
 
 def parse_quarto(file_path: str) -> dict:
@@ -356,6 +359,161 @@ def _extract_cell_outputs_from_notebook(notebook_path: str, cell_id: str = None)
 
     return outputs_data
 
+# ---------------------------------------------------------------------------
+# HTML parsing (primary path)
+# ---------------------------------------------------------------------------
+
+def _find_html_output(report_file: str) -> Optional[Path]:
+    """Return the rendered HTML path if it exists, else None."""
+    stem = Path(report_file).stem
+    candidates = [
+        Path('output') / 'index.html',
+        Path('output') / f'{stem}.html',
+        Path('index.html'),
+        Path(f'{stem}.html'),
+    ]
+    for p in candidates:
+        if p.exists():
+            return p
+    return None
+
+
+def _extract_html_metadata(soup) -> dict:
+    """Extract title, author, date from Quarto HTML <head>."""
+    meta = {}
+    title_tag = soup.find('title')
+    if title_tag:
+        meta['title'] = title_tag.get_text()
+    for m in soup.find_all('meta'):
+        name = m.get('name', '')
+        content = m.get('content', '')
+        if name == 'author':
+            meta['author'] = content
+        elif name in ('dcterms.date', 'date'):
+            meta['date'] = content
+    return meta
+
+
+def _extract_html_structure(main) -> list:
+    """Extract heading hierarchy from the parsed main content element."""
+    structure = []
+    for tag in main.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']):
+        level = int(tag.name[1])
+        text = tag.get_text(strip=True)
+        structure.append({'level': level, 'text': text})
+    return structure
+
+
+def _extract_html_figures(main, html_path: Path) -> list:
+    """Extract figure paths and captions from <figure> elements in rendered HTML."""
+    figures = []
+    html_dir = html_path.parent
+    seen = set()
+
+    for fig in main.find_all('figure'):
+        img = fig.find('img')
+        if not img:
+            continue
+        src = img.get('src', '')
+        if not src or src.startswith('data:') or src.startswith('http'):
+            continue
+
+        fig_path = str(html_dir / src)
+        if fig_path in seen:
+            continue
+        seen.add(fig_path)
+
+        figcaption = fig.find('figcaption')
+        caption = figcaption.get_text(strip=True) if figcaption else Path(src).name
+
+        figures.append({
+            'path': fig_path,
+            'caption': caption,
+            'source': f'html:{src}',
+            'line': -1,
+        })
+
+    return figures
+
+
+def parse_html(html_path: Path) -> dict:
+    """Parse a rendered Quarto HTML file into the standard report structure."""
+    try:
+        from bs4 import BeautifulSoup
+    except ImportError:
+        raise ImportError("beautifulsoup4 required: pip install beautifulsoup4")
+    try:
+        import html2text as h2t
+    except ImportError:
+        raise ImportError("html2text required: pip install html2text")
+
+    print(f"   Parsing rendered HTML: {html_path}")
+    raw = html_path.read_text(encoding='utf-8', errors='replace')
+    soup = BeautifulSoup(raw, 'html.parser')
+
+    metadata = _extract_html_metadata(soup)
+
+    main = (soup.find('main', id='quarto-document-content')
+            or soup.find('main')
+            or soup.find('article'))
+    if main is None:
+        raise ValueError(f"No main content element found in {html_path}")
+
+    # Unwrap code-fold <details> so the code content survives stripping
+    for details in main.find_all('details', class_='code-fold'):
+        details.unwrap()
+
+    # Strip UI chrome
+    for tag in main.find_all(['script', 'style', 'summary', 'button', 'nav']):
+        tag.decompose()
+    for cls in ['quarto-notebook-link', 'quarto-alternate-formats',
+                'quarto-alternate-notebooks']:
+        for tag in main.find_all(class_=cls):
+            tag.decompose()
+
+    # Detect callout boxes (template instructions student forgot to remove)
+    found_callouts = bool(main.find(
+        class_=lambda c: c and any('callout' in part for part in c.split())
+    ))
+    for tag in main.find_all(
+        class_=lambda c: c and any('callout' in part for part in c.split())
+    ):
+        tag.decompose()
+
+    structure = _extract_html_structure(main)
+    figures_list = _extract_html_figures(main, html_path)
+
+    converter = h2t.HTML2Text()
+    converter.body_width = 0        # no line wrapping
+    converter.ignore_images = False # keep ![caption](path) refs in text
+    converter.protect_links = False
+    converter.unicode_snob = True
+    body = converter.handle(str(main))
+    body = re.sub(r'\n{3,}', '\n\n', body).strip()
+
+    stats = _calculate_stats(body, len(figures_list))
+    supplementary_status = _check_supplementary_files()
+
+    return {
+        'content': body,
+        'metadata': metadata,
+        'structure': structure,
+        'figures': {
+            'count': len(figures_list),
+            'details': figures_list,
+        },
+        'notebook_outputs': [],  # outputs are already inline in the HTML content
+        'stats': stats,
+        'supplementary': supplementary_status,
+        'source': 'html',
+        'found_callouts': found_callouts,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
 def main():
     try:
         with open('.github/config.yml', 'r', encoding='utf-8') as f:
@@ -363,11 +521,20 @@ def main():
     except FileNotFoundError:
         print("ERROR: .github/config.yml not found. Using default 'index.qmd'.", file=sys.stderr)
         config = {}
-    
+
     report_file = config.get('report_file', 'index.qmd')
 
-    print(f"Parsing report file: {report_file}...")
-    parsed = parse_quarto(report_file)
+    html_path = _find_html_output(report_file)
+    if html_path:
+        print(f"Found rendered HTML output: {html_path}")
+        try:
+            parsed = parse_html(html_path)
+        except Exception as e:
+            print(f"WARNING: HTML parsing failed ({e}), falling back to .qmd", file=sys.stderr)
+            parsed = parse_quarto(report_file)
+    else:
+        print(f"No rendered HTML found, parsing source: {report_file}")
+        parsed = parse_quarto(report_file)
 
     try:
         with open('parsed_report.json', 'w', encoding='utf-8') as f:
@@ -376,26 +543,30 @@ def main():
         print(f"ERROR: Failed to save parsed report to 'parsed_report.json': {e}", file=sys.stderr)
         sys.exit(1)
 
-    print("\n✅ Report parsed successfully:")
+    source_label = parsed.get('source', 'qmd')
+    print(f"\n✅ Report parsed successfully (source: {source_label}):")
     stats = parsed['stats']
     print(f"   - {stats['word_count']} words")
-    print(f"   - {stats['figures']} figures (manual + generated)")
+    print(f"   - {stats['figures']} figures")
 
-    manual_figs = sum(1 for f in parsed['figures']['details'] if f['source'].startswith('markdown:'))
-    mapped_figs = sum(1 for f in parsed['figures']['details'] if not f['source'].startswith('markdown:'))
-    print(f"     - {manual_figs} manually linked")
-    print(f"     - {mapped_figs} generated from notebooks")
-
-    # Print notebook output statistics
-    nb_outputs = parsed.get('notebook_outputs', [])
-    if nb_outputs:
-        print(f"   - {len(nb_outputs)} notebook cell(s) with outputs extracted")
-        total_tables = sum(len(nb['outputs'].get('html_as_markdown', [])) for nb in nb_outputs)
-        total_text = sum(len(nb['outputs'].get('text', [])) for nb in nb_outputs)
-        if total_tables > 0:
-            print(f"     - {total_tables} HTML table(s) converted to markdown")
-        if total_text > 0:
-            print(f"     - {total_text} text output(s)")
+    if source_label == 'html':
+        print(f"   - notebook outputs inline in content")
+        if parsed.get('found_callouts'):
+            print(f"   - WARNING: template callout boxes detected")
+    else:
+        manual_figs = sum(1 for f in parsed['figures']['details'] if f['source'].startswith('markdown:'))
+        mapped_figs = sum(1 for f in parsed['figures']['details'] if not f['source'].startswith('markdown:'))
+        print(f"     - {manual_figs} manually linked")
+        print(f"     - {mapped_figs} generated from notebooks")
+        nb_outputs = parsed.get('notebook_outputs', [])
+        if nb_outputs:
+            print(f"   - {len(nb_outputs)} notebook cell(s) with outputs extracted")
+            total_tables = sum(len(nb['outputs'].get('html_as_markdown', [])) for nb in nb_outputs)
+            total_text = sum(len(nb['outputs'].get('text', [])) for nb in nb_outputs)
+            if total_tables > 0:
+                print(f"     - {total_tables} HTML table(s) converted to markdown")
+            if total_text > 0:
+                print(f"     - {total_text} text output(s)")
 
 if __name__ == '__main__':
     main()

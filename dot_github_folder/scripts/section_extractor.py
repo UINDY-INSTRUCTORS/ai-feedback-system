@@ -61,8 +61,11 @@ def extract_sections_for_criterion_ai(
     # 1. Extract relevant text sections using an AI model
     full_content = report.get('content', '')
 
-    # Strip out callout boxes (template instructions) before analysis
+    # Strip out callout boxes (template instructions) before analysis.
+    # For HTML-sourced reports, callouts are already stripped; found_callouts
+    # is carried in the report dict instead.
     full_content, found_callouts = strip_callout_boxes(full_content)
+    found_callouts = found_callouts or report.get('found_callouts', False)
     if len(full_content) < 500:
         extracted_text = full_content
     else:

@@ -18,7 +18,7 @@ runs:
     - name: Install Python dependencies
       shell: bash
       run: |
-        pip install pyyaml requests Pillow jupyter nbformat
+        pip install pyyaml requests Pillow jupyter nbformat beautifulsoup4 html2text
 
     - name: Validate feedback configuration
       shell: bash
