@@ -198,7 +198,7 @@ def run_feedback_pipeline(repo_path: Path, output_path: Path = None,
                           use_docker: bool = False, skip_render: bool = False,
                           docker_image: str = None, docker_quarto: str = None,
                           scoring: bool = None, disable_json_mode: bool = False,
-                          verbose: bool = False):
+                          force_qmd: bool = False, verbose: bool = False):
     """Run the complete feedback pipeline for a repo.
 
     Returns:
@@ -237,6 +237,8 @@ def run_feedback_pipeline(repo_path: Path, output_path: Path = None,
             env['AI_MODEL'] = model
         if disable_json_mode:
             env['AI_DISABLE_JSON_MODE'] = 'true'
+        if force_qmd:
+            env['PARSE_SOURCE'] = 'qmd'
         if scoring is not None:
             env['SCORING_ENABLED'] = 'true' if scoring else 'false'
 
@@ -604,6 +606,8 @@ def main():
                        help=f'Quarto path inside container (default: {DOCKER_QUARTO})')
     parser.add_argument('--no-render', action='store_true',
                        help='Skip Quarto rendering (use existing output)')
+    parser.add_argument('--force-qmd', action='store_true',
+                       help='Parse .qmd source directly, ignoring rendered HTML output')
 
     # Scoring options
     scoring_group = parser.add_mutually_exclusive_group()
@@ -706,6 +710,7 @@ def main():
                                            docker_quarto=args.docker_quarto,
                                            scoring=args.scoring,
                                            disable_json_mode=args.disable_json_mode,
+                                           force_qmd=args.force_qmd,
                                            verbose=args.verbose)
             if result and result.get('success'):
                 successful += 1
@@ -774,6 +779,7 @@ def main():
                                                docker_quarto=args.docker_quarto,
                                                scoring=args.scoring,
                                                disable_json_mode=args.disable_json_mode,
+                                               force_qmd=args.force_qmd,
                                                verbose=args.verbose)
                 if result['success']:
                     successful += 1
@@ -812,6 +818,7 @@ def main():
                                     docker_quarto=args.docker_quarto,
                                     scoring=args.scoring,
                                     disable_json_mode=args.disable_json_mode,
+                                    force_qmd=args.force_qmd,
                                     verbose=args.verbose)
     sys.exit(0 if result['success'] else 1)
 

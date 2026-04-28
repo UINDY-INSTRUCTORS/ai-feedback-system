@@ -8,6 +8,7 @@ to parsing the .qmd source directly if HTML is not available.
 """
 
 import json
+import os
 import yaml
 import re
 import sys
@@ -524,7 +525,9 @@ def main():
 
     report_file = config.get('report_file', 'index.qmd')
 
-    html_path = _find_html_output(report_file)
+    force_qmd = os.environ.get('PARSE_SOURCE', '').lower() == 'qmd'
+
+    html_path = None if force_qmd else _find_html_output(report_file)
     if html_path:
         print(f"Found rendered HTML output: {html_path}")
         try:
@@ -533,7 +536,10 @@ def main():
             print(f"WARNING: HTML parsing failed ({e}), falling back to .qmd", file=sys.stderr)
             parsed = parse_quarto(report_file)
     else:
-        print(f"No rendered HTML found, parsing source: {report_file}")
+        if force_qmd:
+            print(f"Parsing source .qmd (PARSE_SOURCE=qmd): {report_file}")
+        else:
+            print(f"No rendered HTML found, parsing source: {report_file}")
         parsed = parse_quarto(report_file)
 
     try:
