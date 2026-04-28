@@ -3,8 +3,9 @@
 Check .qmd files for embed problems and common syntax gotchas.
 
 Checks performed:
-  1. Embed references: verifies tags/labels exist in the target notebook
-  2. Code fence + hr collision: '---' immediately after closing '```'
+  1. Front matter YAML: parses the YAML front matter block and reports syntax errors
+  2. Embed references: verifies tags/labels exist in the target notebook
+  3. Code fence + hr collision: '---' immediately after closing '```'
      (no blank line) can be misparsed as a YAML delimiter
   3. Unclosed code fences: odd number of fence markers means one is missing
   4. Unclosed callout divs: ':::' divs that are opened but never closed
@@ -14,6 +15,9 @@ Checks performed:
      silently ignored if not separated from surrounding content
   7. Duplicate notebook tags: two cells sharing the same tag in a notebook
      referenced by an embed — Quarto may not resolve the right cell
+  8. Embedded setext heading: an embedded cell's stream output has a line
+     with '|' followed by an all-dashes line — pandoc parses this as a
+     heading, breaking Quarto's embed div wrapper and causing Lua warnings
 
 Usage:
     python check_qmd.py <qmd_file>
@@ -25,6 +29,8 @@ import json
 import re
 import sys
 from pathlib import Path
+
+import yaml
 
 
 # ---------------------------------------------------------------------------
@@ -125,6 +131,59 @@ def check_embeds(qmd_path: Path) -> list[dict]:
     return issues
 
 
+def check_embedded_setext_heading(qmd_path: Path) -> list[dict]:
+    """Detect embedded notebook cells whose stream output contains a setext-heading
+    pattern (a line with '|' immediately followed by an all-dashes line).
+
+    Pandoc parses such content as a level-2 heading, which breaks the
+    ':::{.quarto-embed-nb-cell}' div wrapper Quarto injects around the cell,
+    causing it to appear as a literal string in the AST and triggering Quarto
+    Lua filter warnings.  The fix: remove the dashes-only separator line from
+    the print statement, or replace it with one that includes '|' separators.
+    """
+    embeds = parse_embeds(qmd_path)
+    if not embeds:
+        return []
+
+    issues = []
+    setext_re = re.compile(r"^[-\s]+$")
+
+    for embed in embeds:
+        nb_path = qmd_path.parent / embed["notebook"]
+        if not nb_path.exists():
+            continue
+        with open(nb_path) as f:
+            nb = json.load(f)
+
+        for cell in nb["cells"]:
+            tags = cell.get("metadata", {}).get("tags", [])
+            if embed["tag"] not in tags:
+                continue
+            for out in cell.get("outputs", []):
+                if out.get("output_type") != "stream":
+                    continue
+                lines = "".join(out.get("text", [])).splitlines()
+                for i in range(1, len(lines)):
+                    prev = lines[i - 1]
+                    curr = lines[i]
+                    if "|" in prev and setext_re.match(curr) and len(curr) >= 3:
+                        issues.append({
+                            "check": "embed",
+                            "line_num": embed["line_num"],
+                            "issue": (
+                                f"Cell '{embed['tag']}' in {embed['notebook']} has a "
+                                f"stream output line '{prev.strip()[:40]}' followed by "
+                                f"an all-dashes line — pandoc parses this as a setext "
+                                f"heading, breaking the embed div wrapper and causing "
+                                f"Quarto Lua filter warnings. Remove or change the "
+                                f"dashes-only separator (e.g. add '|' between columns)."
+                            ),
+                        })
+                        break  # one report per cell is enough
+
+    return issues
+
+
 def check_duplicate_notebook_tags(qmd_path: Path) -> list[dict]:
     """Check for duplicate tags across cells in notebooks referenced by embeds."""
     embeds = parse_embeds(qmd_path)
@@ -193,6 +252,44 @@ def check_duplicate_notebook_tags(qmd_path: Path) -> list[dict]:
                     })
 
     return issues
+
+
+# ---------------------------------------------------------------------------
+# Front matter checks
+# ---------------------------------------------------------------------------
+
+def check_front_matter_yaml(qmd_path: Path) -> list[dict]:
+    """Detect invalid YAML in the front matter block.
+
+    Tries to parse the content between the opening and closing '---' delimiters
+    using PyYAML. Reports the line number and message from any parse error.
+    """
+    lines = qmd_path.read_text().splitlines()
+    if not lines or lines[0].strip() != "---":
+        return []
+
+    end = -1
+    for i in range(1, len(lines)):
+        if lines[i].strip() == "---":
+            end = i
+            break
+    if end == -1:
+        return []
+
+    yaml_text = "\n".join(lines[1:end])
+    try:
+        yaml.safe_load(yaml_text)
+    except yaml.YAMLError as exc:
+        line_num = 1
+        if hasattr(exc, "problem_mark") and exc.problem_mark is not None:
+            line_num = exc.problem_mark.line + 2  # +1 for opening ---, +1 for 1-based
+        msg = exc.problem if hasattr(exc, "problem") and exc.problem else str(exc)
+        return [{
+            "check": "yaml",
+            "line_num": line_num,
+            "issue": f"Invalid YAML in front matter: {msg}",
+        }]
+    return []
 
 
 # ---------------------------------------------------------------------------
@@ -361,6 +458,56 @@ def check_ambiguous_hr(qmd_path: Path) -> list[dict]:
     return issues
 
 
+def check_trailing_hr_no_newline(qmd_path: Path) -> list[dict]:
+    """Detect a trailing '---' at EOF with no final newline.
+
+    When a .qmd file using 'jupyter: python3' ends with '---' and no trailing
+    newline, Quarto/pandoc misparses the document structure and produces a blank
+    output (empty PDF or HTML with only a title).  Adding a newline after the
+    final '---' fixes the issue.
+
+    This was confirmed as the root cause of the blank-PDF bug via bisect testing:
+    'fixed+jpy + ---\\n' renders correctly while 'fixed+jpy + ---' (no newline)
+    produces blank output when the embedded notebook has unclosed code fences.
+    """
+    raw = qmd_path.read_text()
+    lines = raw.split('\n')
+
+    # Find front-matter end (second ---)
+    front_matter_end = -1
+    if lines and lines[0].strip() == '---':
+        for i in range(1, len(lines)):
+            if lines[i].strip() == '---':
+                front_matter_end = i
+                break
+
+    # Check if last non-empty content is '---' AND file has no trailing newline
+    # (i.e., raw text does not end with '\n')
+    if raw.endswith('\n'):
+        return []
+
+    stripped_lines = raw.rstrip('\n').split('\n')
+    if not stripped_lines:
+        return []
+
+    last_line = stripped_lines[-1].strip()
+    if last_line == '---':
+        # Make sure it's not the front-matter delimiter
+        last_line_idx = len(stripped_lines) - 1
+        if last_line_idx > front_matter_end:
+            return [{
+                "check": "syntax",
+                "line_num": last_line_idx + 1,
+                "issue": (
+                    "File ends with '---' but has no trailing newline. "
+                    "When 'jupyter: python3' is set in front matter, this causes "
+                    "Quarto to produce blank output (empty PDF/HTML). "
+                    "Add a newline after the final '---'."
+                ),
+            }]
+    return []
+
+
 def check_shortcode_spacing(qmd_path: Path) -> list[dict]:
     """Detect shortcodes ({{< ... >}}) lacking blank lines before/after.
 
@@ -421,12 +568,15 @@ def check_shortcode_spacing(qmd_path: Path) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 ALL_CHECKS = [
+    ("Front matter YAML", check_front_matter_yaml),
     ("Embed references", check_embeds),
+    ("Embedded setext heading", check_embedded_setext_heading),
     ("Duplicate notebook tags", check_duplicate_notebook_tags),
     ("Code fence + hr collision", check_fence_hr_collision),
     ("Unclosed code fences", check_unclosed_fences),
     ("Unclosed callout divs", check_unclosed_divs),
     ("Ambiguous hr", check_ambiguous_hr),
+    ("Trailing --- without newline", check_trailing_hr_no_newline),
     ("Shortcode spacing", check_shortcode_spacing),
 ]
 
