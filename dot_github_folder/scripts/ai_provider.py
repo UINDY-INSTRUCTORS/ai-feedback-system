@@ -302,6 +302,22 @@ def resolve_provider_config(repo_config: dict = None, profile: str = None) -> di
         or 240
     )
 
+    # Frequency penalty (optional): profile > global config > repo config
+    _fp = (
+        profile_config.get('frequency_penalty')
+        if profile_config.get('frequency_penalty') is not None
+        else global_config.get('frequency_penalty')
+        if global_config.get('frequency_penalty') is not None
+        else repo_config.get('frequency_penalty')
+    )
+
+    def _first(*sources, key):
+        for s in sources:
+            v = s.get(key)
+            if v is not None:
+                return v
+        return None
+
     return {
         'provider': provider,
         'api': api,
@@ -315,6 +331,10 @@ def resolve_provider_config(repo_config: dict = None, profile: str = None) -> di
         'request_timeout': request_timeout,
         'vertex_project': vertex_project,
         'vertex_location': vertex_location,
+        'frequency_penalty': _fp,
+        'system_prompt': _first(profile_config, global_config, repo_config, key='system_prompt'),
+        'extractor_system_prompt': _first(profile_config, global_config, repo_config, key='extractor_system_prompt'),
+        'extractor_max_output_tokens': _first(profile_config, global_config, repo_config, key='extractor_max_output_tokens'),
     }
 
 
@@ -348,8 +368,9 @@ def _call_openai_compatible(
         "temperature": 0.3,
         "max_tokens": config.get('max_output_tokens', 2000),
     }
-    is_local = 'localhost' in api_base or '127.0.0.1' in api_base
-    if json_mode and not disable_json_mode and not is_local:
+    if config.get('frequency_penalty') is not None:
+        payload["frequency_penalty"] = config['frequency_penalty']
+    if json_mode and not disable_json_mode:
         payload["response_format"] = {"type": "json_object"}
     if session_id:
         payload["session_id"] = session_id
@@ -818,8 +839,10 @@ def call_ai(
     session_id = os.environ.get('AI_SESSION_ID') or None
     disable_json_mode = provider_config.get('disable_json_mode', False)
 
-    # Provider config timeout takes precedence over repo config (already resolved through priority chain)
+    # Provider config timeout and generation params take precedence over repo config
     effective_config = {**config, 'request_timeout': provider_config['request_timeout']}
+    if provider_config.get('frequency_penalty') is not None:
+        effective_config['frequency_penalty'] = provider_config['frequency_penalty']
 
     def _call(m):
         if api == 'openai':

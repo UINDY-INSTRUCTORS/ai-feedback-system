@@ -44,7 +44,7 @@ from typing import Optional
 SCRIPT_DIR = Path(__file__).parent / 'dot_github_folder' / 'scripts'
 sys.path.insert(0, str(SCRIPT_DIR))
 
-from ai_feedback_criterion import analyze_criterion
+from ai_feedback_criterion import analyze_criterion, init_debug_mode
 from ai_provider import resolve_provider_config, print_configured_profiles
 
 
@@ -68,7 +68,7 @@ def _load_paths_from_file(file_path: str) -> list:
         lines = sys.stdin.read().splitlines()
     else:
         lines = Path(file_path).read_text().splitlines()
-    return [Path(line.strip()) for line in lines if line.strip()]
+    return [Path(line.strip()).expanduser() for line in lines if line.strip()]
 
 
 def _find_repos_in_dir(directory: Path) -> list:
@@ -301,6 +301,7 @@ def run_focus_for_repo(repo: Path, criterion: dict, guidance: str, config: dict,
     original_cwd = Path.cwd()
     try:
         os.chdir(repo)
+        init_debug_mode(config)
         if disable_json_mode:
             os.environ['AI_DISABLE_JSON_MODE'] = 'true'
         for display_key, provider_config in model_configs:
