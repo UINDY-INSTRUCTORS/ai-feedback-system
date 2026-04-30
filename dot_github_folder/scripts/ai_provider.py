@@ -332,6 +332,7 @@ def resolve_provider_config(repo_config: dict = None, profile: str = None) -> di
         'vertex_project': vertex_project,
         'vertex_location': vertex_location,
         'frequency_penalty': _fp,
+        'max_retries': _first(profile_config, global_config, repo_config, key='max_retries'),
         'max_output_tokens': _first(profile_config, global_config, key='max_output_tokens'),
         'system_prompt': _first(profile_config, global_config, repo_config, key='system_prompt'),
         'extractor_system_prompt': _first(profile_config, global_config, repo_config, key='extractor_system_prompt'),
@@ -856,6 +857,7 @@ def call_ai(
 
     session_id = os.environ.get('AI_SESSION_ID') or None
     disable_json_mode = provider_config.get('disable_json_mode', False)
+    max_retries = provider_config.get('max_retries') or max_retries
 
     # Provider config timeout and generation params take precedence over repo config
     effective_config = {**config, 'request_timeout': provider_config['request_timeout']}
