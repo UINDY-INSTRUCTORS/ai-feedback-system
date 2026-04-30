@@ -109,9 +109,9 @@ def build_table(all_scores: list, show_pct: bool | None = None):
         )
 
     if show_pct:
-        header = ['Repo'] + [f'{cn} (%)' for cn in criterion_names] + ['Overall (%)']
+        header = ['Repo'] + ([f'{cn} (%)' for cn in criterion_names] if criterion_names else ['Error']) + ['Overall (%)']
     else:
-        header = ['Repo'] + criterion_names
+        header = ['Repo'] + (criterion_names if criterion_names else ['Error'])
 
     rows = []
     for entry in all_scores:

@@ -295,6 +295,10 @@ def run_feedback_pipeline(repo_path: Path, output_path: Path = None,
         if result.returncode != 0:
             if not verbose:
                 print(f"❌ Feedback generation failed:\n{result.stderr}")
+            # Recover partial scores from feedback.json if any criteria succeeded
+            partial = extract_scores_from_feedback(repo_path)
+            if partial.get('criteria'):
+                return {'success': False, 'scores': partial}
             return {'success': False, 'scores': {'repo': repo_path.name, 'criteria': {}, 'error': 'Feedback generation failed'}}
         if result.stdout and not verbose:
             print(result.stdout)

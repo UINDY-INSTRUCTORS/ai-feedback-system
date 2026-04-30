@@ -332,6 +332,7 @@ def resolve_provider_config(repo_config: dict = None, profile: str = None) -> di
         'vertex_project': vertex_project,
         'vertex_location': vertex_location,
         'frequency_penalty': _fp,
+        'max_output_tokens': _first(profile_config, global_config, key='max_output_tokens'),
         'system_prompt': _first(profile_config, global_config, repo_config, key='system_prompt'),
         'extractor_system_prompt': _first(profile_config, global_config, repo_config, key='extractor_system_prompt'),
         'extractor_max_output_tokens': _first(profile_config, global_config, repo_config, key='extractor_max_output_tokens'),
@@ -389,9 +390,26 @@ def _call_openai_compatible(
             text = msg.get('content') or msg.get('reasoning') or ''
 
             usage = result.get('usage', {})
+            completion_tokens = usage.get('completion_tokens', 0)
             print(f"   Tokens: {usage.get('total_tokens', 0)} "
                   f"(prompt: {usage.get('prompt_tokens', 0)}, "
-                  f"completion: {usage.get('completion_tokens', 0)})")
+                  f"completion: {completion_tokens})")
+
+            # Empty response in JSON mode: model likely used thinking tokens only.
+            # Retry without response_format so it can produce text output.
+            if not text.strip() and 'response_format' in payload and attempt < max_retries - 1:
+                del payload['response_format']
+                print(f"   Empty response in JSON mode. Retrying without response_format...")
+                continue
+
+            # Truncated at token limit: retry without images to reduce context.
+            if completion_tokens >= payload.get('max_tokens', 2000) and attempt < max_retries - 1:
+                stripped = _strip_images_from_messages(messages)
+                if stripped:
+                    messages = stripped
+                    payload["messages"] = messages
+                    print(f"   Truncated at token limit. Retrying without images...")
+                    continue
 
             return text, result, payload
 
@@ -843,6 +861,8 @@ def call_ai(
     effective_config = {**config, 'request_timeout': provider_config['request_timeout']}
     if provider_config.get('frequency_penalty') is not None:
         effective_config['frequency_penalty'] = provider_config['frequency_penalty']
+    if provider_config.get('max_output_tokens') is not None:
+        effective_config['max_output_tokens'] = provider_config['max_output_tokens']
 
     def _call(m):
         if api == 'openai':

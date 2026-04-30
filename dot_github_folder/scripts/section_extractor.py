@@ -404,6 +404,9 @@ def build_extraction_prompt(report: Dict[str, Any], criterion: Dict[str, Any]) -
 **Report Structure:**
 {heading_list}
 
+**CRITICAL RULE — Embed Shortcodes:**
+Any line containing `{{{{< embed ... >}}}}` that appears in or near a relevant section MUST be copied verbatim into your output. These shortcodes reference figures and data plots that are essential for evaluation. Do not summarize, paraphrase, or omit them.
+
 **Your Task:**
 
 **STEP 1: Identify Relevant Sections**
@@ -420,10 +423,11 @@ Do NOT limit yourself to keyword matching. Think about what information would he
 
 Once you've identified the relevant sections:
 1.  Read the full report below carefully.
-2.  Extract the sections you identified (text, headings, and any `{{< embed >}}` shortcodes) verbatim.
+2.  Extract the identified sections verbatim, preserving headings, formatting, and all `{{{{< embed >}}}}` shortcodes.
 {comprehensiveness_guidance}
-4.  Return the extracted sections verbatim, preserving headings and formatting.
-5.  If multiple sections are relevant, separate them with "---".
+4.  If multiple sections are relevant, separate them with "---".
+5.  If the criterion is not addressed in the report, output the single line: "No relevant content found."
+    Do NOT output an empty response.
 
 **Full Report:**
 ---

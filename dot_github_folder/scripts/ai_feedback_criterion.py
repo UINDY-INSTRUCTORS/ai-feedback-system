@@ -323,7 +323,7 @@ def build_ai_messages(
     Returns:
         list: OpenAI-format messages list
     """
-    default_system = "You are an expert instructor providing constructive, specific feedback on student technical reports in JSON format."
+    default_system = "You are an expert instructor providing constructive, specific feedback on student technical reports in JSON format. Be concise — your entire JSON response should be under 400 tokens."
     system_content = (provider_config or {}).get('system_prompt') or default_system
     messages = [
         {"role": "system", "content": system_content},
