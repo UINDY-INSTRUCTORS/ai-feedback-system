@@ -383,6 +383,7 @@ def _call_openai_compatible(
     for attempt in range(max_retries):
         try:
             print(f"   Calling {model} via {api_base}... (attempt {attempt + 1}/{max_retries})")
+            t0 = time.time()
             response = requests.post(endpoint, headers=headers, json=payload, timeout=timeout)
             response.raise_for_status()
 
@@ -417,8 +418,9 @@ def _call_openai_compatible(
         except requests.exceptions.Timeout as e:
             last_error = e
             if attempt < max_retries - 1:
+                elapsed = time.time() - t0
                 wait = 2 ** attempt + random.uniform(0, 2)
-                print(f"   Request timed out. Waiting {wait:.1f}s before retry...")
+                print(f"   Request timed out after {elapsed:.1f}s. Waiting {wait:.1f}s before retry...")
                 time.sleep(wait)
                 continue
             raise
@@ -499,6 +501,7 @@ def _call_anthropic(
     for attempt in range(max_retries):
         try:
             print(f"   Calling {model} via Anthropic... (attempt {attempt + 1}/{max_retries})")
+            t0 = time.time()
             response = requests.post(endpoint, headers=headers, json=payload, timeout=timeout)
             response.raise_for_status()
 
@@ -526,7 +529,7 @@ def _call_anthropic(
             last_error = e
             if attempt < max_retries - 1:
                 wait = 2 ** attempt + random.uniform(0, 2)
-                print(f"   Request timed out. Waiting {wait:.1f}s before retry...")
+                print(f"   Request timed out after {time.time() - t0:.1f}s. Waiting {wait:.1f}s before retry...")
                 time.sleep(wait)
                 continue
             raise
@@ -589,6 +592,7 @@ def _call_gemini(
     for attempt in range(max_retries):
         try:
             print(f"   Calling {model} via Gemini... (attempt {attempt + 1}/{max_retries})")
+            t0 = time.time()
             response = requests.post(endpoint, headers=headers, json=payload, timeout=timeout)
             response.raise_for_status()
 
@@ -615,7 +619,7 @@ def _call_gemini(
             last_error = e
             if attempt < max_retries - 1:
                 wait = 2 ** attempt + random.uniform(0, 2)
-                print(f"   Request timed out. Waiting {wait:.1f}s before retry...")
+                print(f"   Request timed out after {time.time() - t0:.1f}s. Waiting {wait:.1f}s before retry...")
                 time.sleep(wait)
                 continue
             raise
@@ -686,6 +690,7 @@ def _call_vertex(
     for attempt in range(max_retries):
         try:
             print(f"   Calling {model} via Vertex AI... (attempt {attempt + 1}/{max_retries})")
+            t0 = time.time()
             response = requests.post(endpoint, headers=_get_headers(), json=payload, timeout=timeout)
             response.raise_for_status()
 
@@ -704,7 +709,7 @@ def _call_vertex(
             last_error = e
             if attempt < max_retries - 1:
                 wait = 2 ** attempt + random.uniform(0, 2)
-                print(f"   Request timed out. Waiting {wait:.1f}s before retry...")
+                print(f"   Request timed out after {time.time() - t0:.1f}s. Waiting {wait:.1f}s before retry...")
                 time.sleep(wait)
                 continue
             raise
