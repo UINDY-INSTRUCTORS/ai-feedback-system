@@ -47,7 +47,8 @@ def extract_sections_for_criterion_ai(
     report: Dict[str, Any],
     criterion: Dict[str, Any],
     config: Dict[str, Any],
-    model: str = "gpt-4o-mini"
+    model: str = "gpt-4o-mini",
+    provider_config: dict = None,
 ) -> Tuple[str, List[str], bool]:
     """
     Use AI to extract relevant text, then find associated images and notebook outputs.
@@ -72,7 +73,7 @@ def extract_sections_for_criterion_ai(
         try:
             prompt = build_extraction_prompt(report, criterion)
             print(f"   Extracting relevant sections...")
-            extracted_text = call_extraction_api(prompt, model)
+            extracted_text = call_extraction_api(prompt, model, provider_config=provider_config)
         except Exception as e:
             print(f"WARNING: AI text extraction failed for {criterion['name']}: {e}", file=sys.stderr)
             extracted_text = full_content[:8000]
@@ -406,6 +407,9 @@ def build_extraction_prompt(report: Dict[str, Any], criterion: Dict[str, Any]) -
 **Report Structure:**
 {heading_list}
 
+**CRITICAL RULE — Embed Shortcodes:**
+Any line containing `{{{{< embed ... >}}}}` that appears in or near a relevant section MUST be copied verbatim into your output. These shortcodes reference figures and data plots that are essential for evaluation. Do not summarize, paraphrase, or omit them.
+
 **Your Task:**
 
 **STEP 1: Identify Relevant Sections**
@@ -422,10 +426,11 @@ Do NOT limit yourself to keyword matching. Think about what information would he
 
 Once you've identified the relevant sections:
 1.  Read the full report below carefully.
-2.  Extract the sections you identified (text, headings, and any `{{< embed >}}` shortcodes) verbatim.
+2.  Extract the identified sections verbatim, preserving headings, formatting, and all `{{{{< embed >}}}}` shortcodes.
 {comprehensiveness_guidance}
-4.  Return the extracted sections verbatim, preserving headings and formatting.
-5.  If multiple sections are relevant, separate them with "---".
+4.  If multiple sections are relevant, separate them with "---".
+5.  If the criterion is not addressed in the report, output the single line: "No relevant content found."
+    Do NOT output an empty response.
 
 **Full Report:**
 ---
@@ -434,7 +439,8 @@ Once you've identified the relevant sections:
 
 **Extracted Sections (relevant to "{criterion_name}"){max_content_note}:"""
 
-def call_extraction_api(prompt: str, model: str, max_retries: int = 3) -> str:
+def call_extraction_api(prompt: str, model: str, max_retries: int = 3,
+                        provider_config: dict = None) -> str:
     """Call AI provider for text extraction. Uses the provider abstraction layer."""
     # Estimate tokens before making the API call (rough: ~4 chars per token)
     estimated_prompt_tokens = len(prompt) // 4
@@ -443,16 +449,21 @@ def call_extraction_api(prompt: str, model: str, max_retries: int = 3) -> str:
     if estimated_total_tokens > 15000:
         print(f"   HIGH TOKEN USAGE: Estimated ~{estimated_total_tokens} tokens (prompt: {estimated_prompt_tokens}, output: 4000)")
 
+    if provider_config is None:
+        provider_config = resolve_provider_config()
+
+    default_extractor_system = "You are a document extraction tool. Output only the extracted text. Do not reason step by step, do not explain your thinking, do not add commentary."
+    extractor_system = provider_config.get('extractor_system_prompt') or default_extractor_system
+
     messages = [
-        {"role": "system", "content": "You are a thorough document analyzer. Extract relevant sections verbatim. Balance comprehensiveness with conciseness based on document size."},
+        {"role": "system", "content": extractor_system},
         {"role": "user", "content": prompt}
     ]
 
-    provider_config = resolve_provider_config()
     extractor_model = provider_config['extractor']
     extraction_config = {
-        'max_output_tokens': 4000,
-        'request_timeout': provider_config.get('request_timeout', 240),
+        'max_output_tokens': provider_config.get('extractor_max_output_tokens') or 1500,
+        'request_timeout': provider_config.get('request_timeout') or 240,
     }
 
     text, result, payload = call_ai(

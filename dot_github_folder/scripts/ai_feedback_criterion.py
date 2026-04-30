@@ -211,7 +211,8 @@ def get_criterion_guidance(guidance: str, criterion: dict) -> str:
         return general_guidance
 
 
-def build_criterion_prompt(report: dict, criterion: dict, guidance_excerpt: str, config: dict) -> tuple:
+def build_criterion_prompt(report: dict, criterion: dict, guidance_excerpt: str, config: dict,
+                           provider_config: dict = None) -> tuple:
     """Build focused prompt for analyzing one criterion.
 
     Returns:
@@ -219,7 +220,7 @@ def build_criterion_prompt(report: dict, criterion: dict, guidance_excerpt: str,
     """
     extraction_model = config.get('model', {}).get('extractor', 'gpt-4o-mini')
     relevant_content, image_paths, _ = extract_sections_for_criterion_ai(
-        report, criterion, config, model=extraction_model
+        report, criterion, config, model=extraction_model, provider_config=provider_config
     )
 
     levels_text = ""
@@ -314,6 +315,7 @@ def build_ai_messages(
     prompt: str,
     config: dict,
     image_paths: Optional[List[str]] = None,
+    provider_config: dict = None,
 ) -> list:
     """
     Build the messages list for the AI call, including image optimization.
@@ -321,8 +323,10 @@ def build_ai_messages(
     Returns:
         list: OpenAI-format messages list
     """
+    default_system = "You are an expert instructor providing constructive, specific feedback on student technical reports in JSON format. Be concise — your entire JSON response should be under 400 tokens."
+    system_content = (provider_config or {}).get('system_prompt') or default_system
     messages = [
-        {"role": "system", "content": "You are an expert instructor providing constructive, specific feedback on student technical reports in JSON format."},
+        {"role": "system", "content": system_content},
     ]
     user_content = [{"type": "text", "text": prompt}]
 
@@ -373,11 +377,12 @@ def analyze_criterion(report: dict, criterion: dict, guidance: str, config: dict
 
     try:
         guidance_excerpt = get_criterion_guidance(guidance, criterion)
-        prompt, context, image_paths = build_criterion_prompt(report, criterion, guidance_excerpt, config)
+        prompt, context, image_paths = build_criterion_prompt(report, criterion, guidance_excerpt, config,
+                                                               provider_config=provider_config)
         metadata["image_paths"] = image_paths
         metadata["requested_images"] = len(image_paths)
 
-        messages = build_ai_messages(prompt, config, image_paths=image_paths)
+        messages = build_ai_messages(prompt, config, image_paths=image_paths, provider_config=provider_config)
 
         start_time = datetime.now().timestamp()
         feedback_json, response_data, request_payload = call_ai(

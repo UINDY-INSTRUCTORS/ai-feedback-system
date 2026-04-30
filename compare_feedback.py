@@ -138,19 +138,21 @@ def model_short(model_id: str) -> str:
 # ---------------------------------------------------------------------------
 
 def run_model(model_id: str, criterion_messages: dict, config: dict,
-              provider_config: dict) -> dict:
+              provider_config: dict, criterion_contexts: dict = None) -> dict:
     """
     Run feedback for all criteria with the given model.
 
     Returns {criterion_name: {success, feedback, elapsed, tokens, error}}
     """
     from ai_provider import call_ai
+    from ai_feedback_criterion import save_debug_criterion_data
 
     pc = {**provider_config, 'model': model_id, 'fallback': model_id,
           'extractor': model_id, 'extractor_fallback': model_id}
 
+    criterion_names = list(criterion_messages.keys())
     results = {}
-    for name, messages in criterion_messages.items():
+    for ci, (name, messages) in enumerate(criterion_messages.items()):
         if messages is None:
             results[name] = {'success': False, 'error': 'extraction failed',
                              'feedback': None, 'elapsed': 0, 'tokens': {}}
@@ -159,10 +161,11 @@ def run_model(model_id: str, criterion_messages: dict, config: dict,
         start = time.time()
         text = ''
         response_data = {}
+        request_payload = {}
         error = None
 
         try:
-            text, response_data, _ = call_ai(
+            text, response_data, request_payload = call_ai(
                 messages, model_id, config,
                 provider_config=pc,
                 json_mode=True,
@@ -171,6 +174,20 @@ def run_model(model_id: str, criterion_messages: dict, config: dict,
             error = str(e)
 
         elapsed = time.time() - start
+        metadata = {
+            'criterion_id': name,
+            'criterion_index': ci,
+            'criterion_name': name,
+            'model_used': model_id,
+            'provider': pc.get('provider', ''),
+            'success': error is None and bool(text),
+        }
+        if error:
+            metadata['error'] = error
+        save_debug_criterion_data(
+            metadata, (criterion_contexts or {}).get(name, ''), '',
+            request_payload, response_data, text,
+        )
         usage = response_data.get('usage', {})
         feedback = safe_parse_json(text) if text else None
         parse_failed = text and not feedback and not error
@@ -581,9 +598,11 @@ def main():
         from ai_feedback_criterion import (
             load_config, load_rubric, load_guidance, load_report,
             get_criterion_guidance, build_criterion_prompt, build_ai_messages,
+            init_debug_mode, save_debug_criterion_data,
         )
 
         config = load_config()
+        init_debug_mode(config)
         rubric = load_rubric()
         guidance = load_guidance()
         report = load_report()
@@ -657,7 +676,7 @@ def main():
             print(f"\n── {label}")
             all_results[model_id] = run_model(
                 model_id, criterion_messages, config,
-                get_provider_config(profile_name))
+                get_provider_config(profile_name), criterion_contexts)
 
             # Save this model's feedback.json
             safe_name = model_short(model_id)

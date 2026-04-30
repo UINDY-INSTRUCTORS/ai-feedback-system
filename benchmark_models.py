@@ -155,8 +155,10 @@ def check_quality(text: str) -> dict:
 # ---------------------------------------------------------------------------
 
 def test_model(model_id: str, messages: list, config: dict,
-               provider_config: dict) -> dict:
+               provider_config: dict, criterion_name: str = '',
+               criterion_index: int = 0, context: str = '', prompt: str = '') -> dict:
     from ai_provider import call_ai
+    from ai_feedback_criterion import save_debug_criterion_data
 
     pc = {**provider_config, 'model': model_id, 'fallback': model_id,
           'extractor': model_id, 'extractor_fallback': model_id}
@@ -164,10 +166,11 @@ def test_model(model_id: str, messages: list, config: dict,
     start = time.time()
     text = ''
     response_data = {}
+    request_payload = {}
     error = None
 
     try:
-        text, response_data, _ = call_ai(
+        text, response_data, request_payload = call_ai(
             messages, model_id, config,
             provider_config=pc,
             json_mode=True,
@@ -176,6 +179,17 @@ def test_model(model_id: str, messages: list, config: dict,
         error = str(e)[:100]
 
     elapsed = time.time() - start
+    metadata = {
+        'criterion_id': criterion_name,
+        'criterion_index': criterion_index,
+        'criterion_name': criterion_name,
+        'model_used': model_id,
+        'provider': pc.get('provider', ''),
+        'success': error is None and bool(text),
+    }
+    if error:
+        metadata['error'] = error
+    save_debug_criterion_data(metadata, context, prompt, request_payload, response_data, text)
     usage = response_data.get('usage', {})
     prompt_tokens = usage.get('prompt_tokens', 0)
     completion_tokens = usage.get('completion_tokens', 0)
@@ -343,9 +357,11 @@ def main():
         from ai_feedback_criterion import (
             load_config, load_rubric, load_guidance, load_report,
             get_criterion_guidance, build_criterion_prompt, build_ai_messages,
+            init_debug_mode, save_debug_criterion_data,
         )
 
         config = load_config()
+        init_debug_mode(config)
         rubric = load_rubric()
         guidance = load_guidance()
         report = load_report()
@@ -384,6 +400,7 @@ def main():
         # Build prompts once per criterion — extraction is the same for all models
         print("Extracting criterion prompts (once)...")
         criterion_prompts = {}
+        criterion_contexts = {}
         for criterion in test_criteria:
             try:
                 guidance_excerpt = get_criterion_guidance(guidance, criterion)
@@ -392,10 +409,12 @@ def main():
                 effective_images = [] if args.no_vision else image_paths
                 messages = build_ai_messages(prompt, config, image_paths=effective_images)
                 criterion_prompts[criterion['name']] = messages
+                criterion_contexts[criterion['name']] = (prompt, context)
                 print(f"  ✓ {criterion['name']}")
             except Exception as e:
                 print(f"  ✗ {criterion['name']}: {e}")
                 criterion_prompts[criterion['name']] = None
+                criterion_contexts[criterion['name']] = ('', '')
         print()
 
         all_results = {}
@@ -404,10 +423,11 @@ def main():
             print(f"── {model_id}")
             criterion_results = []
 
-            for criterion in test_criteria:
-                messages = criterion_prompts.get(criterion['name'])
+            for ci, criterion in enumerate(test_criteria):
+                cname = criterion['name']
+                messages = criterion_prompts.get(cname)
                 if messages is None:
-                    print(f"   [✗] {criterion['name'][:40]:<40}  skipped (extraction failed)")
+                    print(f"   [✗] {cname[:40]:<40}  skipped (extraction failed)")
                     criterion_results.append({
                         'success': False, 'elapsed': 0,
                         'prompt_tokens': 0, 'completion_tokens': 0, 'tps': 0,
@@ -416,17 +436,20 @@ def main():
                     })
                     continue
                 try:
-                    r = test_model(model_id, messages, config, provider_config)
+                    ctx_prompt, ctx_context = criterion_contexts.get(cname, ('', ''))
+                    r = test_model(model_id, messages, config, provider_config,
+                                   criterion_name=cname, criterion_index=ci,
+                                   context=ctx_context, prompt=ctx_prompt)
                     criterion_results.append(r)
 
                     status = '✓' if r['success'] else '✗'
                     tok = r['completion_tokens']
-                    print(f"   [{status}] {criterion['name'][:40]:<40}  "
+                    print(f"   [{status}] {cname[:40]:<40}  "
                           f"{r['elapsed']:5.1f}s  {tok:4d} tok  {r['tps']:5.1f} tps"
                           + (f"  ⚠ {r['error'][:50]}" if r['error'] else ''))
 
                 except Exception as e:
-                    print(f"   [✗] {criterion['name'][:40]:<40}  exception: {e}")
+                    print(f"   [✗] {cname[:40]:<40}  exception: {e}")
                     criterion_results.append({
                         'success': False, 'elapsed': 0,
                         'prompt_tokens': 0, 'completion_tokens': 0, 'tps': 0,
