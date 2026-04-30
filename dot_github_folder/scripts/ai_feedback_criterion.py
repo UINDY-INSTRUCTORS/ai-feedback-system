@@ -462,7 +462,8 @@ def analyze_criterion(report: dict, criterion: dict, guidance: str, config: dict
             'criterion': criterion_name,
             'feedback': feedback_content,
             'success': True,
-            'tokens': tokens
+            'tokens': tokens,
+            '_extracted_text': context,
         }
 
     except Exception as e:
@@ -478,8 +479,151 @@ def analyze_criterion(report: dict, criterion: dict, guidance: str, config: dict
             'feedback': f"Error analyzing this criterion: {e}",
             'success': False,
             'error': str(e),
-            'tokens': {'prompt_tokens': 0, 'completion_tokens': 0, 'total_tokens': 0}
+            'tokens': {'prompt_tokens': 0, 'completion_tokens': 0, 'total_tokens': 0},
+            '_extracted_text': context,
         }
+
+
+def _tokenize(text: str) -> set:
+    import re
+    return {w for w in re.findall(r'\b[a-z]{3,}\b', text.lower())}
+
+
+def _jaccard(a: set, b: set) -> float:
+    union = a | b
+    return len(a & b) / len(union) if union else 0.0
+
+
+def generate_organization_feedback(
+    all_results: list,
+    rubric: dict,
+    report: dict,
+    config: dict,
+    provider_config: dict,
+) -> dict:
+    """
+    Compute extraction discrimination metrics across all criteria and ask
+    the AI to write a brief organization-quality paragraph for the student.
+
+    Returns a feedback.json-compatible dict with criterion='__organization__'.
+    """
+    import re
+
+    criteria = rubric.get('criteria', [])
+    report_words = report.get('stats', {}).get('word_count', 0)
+
+    # Collect extracted texts keyed by criterion name
+    extractions: dict[str, str] = {}
+    for result in all_results:
+        name = result.get('criterion', '')
+        text = result.get('_extracted_text', '') or ''
+        if name and text:
+            extractions[name] = text
+
+    if not extractions:
+        return None
+
+    tokens_by_name = {n: _tokenize(t) for n, t in extractions.items()}
+
+    # Coverage fractions
+    def wc(t): return len(re.findall(r'\w+', t))
+    coverage = {
+        n: (wc(extractions[n]) / report_words if report_words else 0)
+        for n in extractions
+    }
+
+    # High-overlap pairs (Jaccard > 0.55)
+    names = list(extractions.keys())
+    high_overlap = []
+    for i, a in enumerate(names):
+        for b in names[i+1:]:
+            j = _jaccard(tokens_by_name[a], tokens_by_name[b])
+            if j > 0.55:
+                high_overlap.append((a, b, j))
+    high_overlap.sort(key=lambda x: -x[2])
+
+    # Low-coverage criteria (< 5%)
+    thin = [n for n, cov in coverage.items() if cov < 0.05]
+
+    # Build metrics summary for the AI prompt
+    cov_lines = '\n'.join(
+        f"  - {n}: {coverage.get(n, 0):.0%} ({wc(extractions.get(n,''))} words)"
+        for n in names
+    )
+    overlap_lines = '\n'.join(
+        f"  - '{a}' ↔ '{b}': {j:.0%} overlap"
+        for a, b, j in high_overlap[:6]
+    ) or '  (none above threshold)'
+
+    thin_line = ', '.join(f"'{n}'" for n in thin) if thin else '(none)'
+
+    assignment_name = config.get('assignment', {}).get('name', 'this assignment')
+    course_name = config.get('course', {}).get('name', '')
+
+    prompt = f"""\
+You are reviewing a student's technical report for {course_name} — {assignment_name}.
+
+The table below shows what fraction of the report's content is relevant to each rubric criterion,
+and which criterion pairs share heavily overlapping content (suggesting those topics were not
+clearly separated in the report).
+
+**Content coverage per criterion** (fraction of report words relevant to each):
+{cov_lines}
+
+**High-overlap criterion pairs** (Jaccard similarity > 55% — content is blended):
+{overlap_lines}
+
+**Criteria with very thin coverage (< 5%):** {thin_line}
+
+Write 3–5 sentences of constructive feedback addressed directly to the student about their
+report's *organization* and *structure*. Focus on:
+1. Which rubric areas are underrepresented or blended together.
+2. Concrete suggestions for how to restructure (e.g., add explicit section headings, separate
+   demo programs from simulations, write a distinct conclusion).
+Do NOT comment on the technical content — only structure and organization.
+Be specific and use the actual criterion names above. Do not use bullet points; write prose.
+"""
+
+    messages = [
+        {"role": "system", "content": "You are an expert writing instructor. Respond in plain prose, 3-5 sentences."},
+        {"role": "user", "content": [{"type": "text", "text": prompt}]},
+    ]
+
+    extractor_model = provider_config.get('extractor_model') or provider_config.get('model')
+    print(f"\n Generating organization feedback...")
+    try:
+        org_text, _, _ = call_ai(
+            messages, extractor_model, config,
+            provider_config=provider_config,
+            json_mode=False,
+        )
+        org_text = org_text.strip()
+    except Exception as e:
+        print(f"   Organization feedback failed: {e}")
+        org_text = None
+
+    # Build the structured payload (coverage table + AI text)
+    coverage_rows = [
+        {'criterion': n, 'coverage_pct': round(coverage.get(n, 0) * 100, 1),
+         'words': wc(extractions.get(n, ''))}
+        for n in names
+    ]
+    overlap_rows = [
+        {'criterion_a': a, 'criterion_b': b, 'jaccard': round(j, 2)}
+        for a, b, j in high_overlap[:6]
+    ]
+
+    return {
+        'criterion': '__organization__',
+        'success': True,
+        'feedback': {
+            'summary': org_text or '(organization analysis unavailable)',
+            'coverage': coverage_rows,
+            'high_overlap': overlap_rows,
+            'report_words': report_words,
+        },
+        'tokens': {'prompt_tokens': 0, 'completion_tokens': 0, 'total_tokens': 0},
+    }
 
 
 def main():
@@ -510,6 +654,17 @@ def main():
         all_feedback_json.append(result)
         if result['success']:
             total_tokens += result.get('tokens', {}).get('total_tokens', 0)
+
+    # Generate organization section (uses extracted texts collected above)
+    org_result = generate_organization_feedback(
+        all_feedback_json, rubric, report, config, provider_config
+    )
+    if org_result:
+        all_feedback_json.insert(0, org_result)
+
+    # Strip internal _extracted_text before saving (not needed in output)
+    for r in all_feedback_json:
+        r.pop('_extracted_text', None)
 
     # --- Create final feedback document ---
     # This part would now format the collected JSON into a nice .md file

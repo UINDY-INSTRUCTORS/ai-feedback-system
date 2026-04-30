@@ -182,6 +182,15 @@ def criterion_has_images(
                 if validate_image_file(fig['path']):
                     return True
 
+    # Strategy 4: HTML-sourced figures — check if relative src path appears in extracted text
+    # (html2text produces ![caption](src) refs, so the path will be present for relevant sections)
+    for fig in all_figures:
+        if fig['source'].startswith('html:'):
+            relative_src = fig['source'][len('html:'):]
+            if relative_src in extracted_text:
+                if validate_image_file(fig['path']):
+                    return True
+
     return False
 
 def augment_with_notebook_outputs(report: Dict[str, Any], extracted_text: str) -> str:
@@ -322,6 +331,17 @@ def extract_relevant_images(
                     relevant_images[fig['path']] = priority
                 else:
                     print(f"   Skipping invalid/missing manual image: {fig['path']}")
+
+    # Strategy 4: HTML-sourced figures — check if relative src path appears in extracted text
+    for fig in all_figures:
+        if fig['source'].startswith('html:') and fig['path'] not in relevant_images:
+            relative_src = fig['source'][len('html:'):]
+            if relative_src in extracted_text:
+                if validate_image_file(fig['path']):
+                    priority = get_image_priority(fig, vision_config.get('image_priority', []))
+                    relevant_images[fig['path']] = priority
+                else:
+                    print(f"   Skipping invalid/missing HTML figure: {fig['path']}")
 
     # --- Prioritize and filter the collected images ---
     sorted_paths = sorted(relevant_images.keys(), key=lambda p: relevant_images[p])

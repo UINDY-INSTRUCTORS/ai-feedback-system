@@ -11,4 +11,6 @@ dependencies = [
     "google-auth>=2.0.0",
     "google-cloud>=0.34.0",
     "google-cloud-aiplatform>=1.148.1",
+    "beautifulsoup4>=4.14.3",
+    "html2text>=2025.4.15",
 ]

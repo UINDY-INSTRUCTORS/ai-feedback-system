@@ -34,6 +34,50 @@ def create_github_issue(title: str, body: str, label: str):
         print(f"Response: {e.response.text}", file=sys.stderr)
         sys.exit(1)
 
+def _bar(pct: float, width: int = 20) -> str:
+    filled = round(pct / 100 * width)
+    return '█' * filled + '░' * (width - filled)
+
+
+def format_organization_section(org_item: dict) -> str:
+    """Render the __organization__ entry as a markdown section."""
+    feedback = org_item.get('feedback', {})
+    summary = feedback.get('summary', '')
+    coverage = feedback.get('coverage', [])
+    high_overlap = feedback.get('high_overlap', [])
+    report_words = feedback.get('report_words', 0)
+
+    parts = [
+        '### 📐 Report Organization\n',
+        f'> {summary}\n' if summary else '',
+    ]
+
+    if coverage:
+        parts.append('\n**Rubric coverage** (fraction of report content found for each criterion):\n')
+        parts.append('| Criterion | Coverage | Words |')
+        parts.append('|-----------|----------|-------|')
+        for row in coverage:
+            name = row.get('criterion', '')
+            pct = row.get('coverage_pct', 0)
+            words = row.get('words', 0)
+            bar = _bar(pct)
+            flag = ' ⚠' if pct < 5 else ''
+            parts.append(f'| {name} | `{bar}` {pct:.0f}%{flag} | {words} |')
+        if report_words:
+            parts.append(f'\n*Full report: {report_words} words.*')
+
+    if high_overlap:
+        parts.append('\n**Sections with blended content** (high Jaccard overlap between criteria):\n')
+        for row in high_overlap:
+            a = row.get('criterion_a', '')
+            b = row.get('criterion_b', '')
+            j = row.get('jaccard', 0)
+            parts.append(f'- *{a}* ↔ *{b}*: {j:.0%} overlap')
+
+    parts.append('\n---\n')
+    return '\n'.join(p for p in parts if p is not None)
+
+
 def format_feedback_body(feedback_data: list, rubric_data: dict, config: dict) -> str:
     """Formats the list of JSON feedback objects into a Markdown string."""
     body_parts = []
@@ -49,6 +93,11 @@ def format_feedback_body(feedback_data: list, rubric_data: dict, config: dict) -
 
     for item in feedback_data:
         criterion_name = item.get('criterion', 'Unknown Criterion')
+
+        # Render organization section before per-criterion feedback
+        if criterion_name == '__organization__':
+            body_parts.append(format_organization_section(item))
+            continue
         body_parts.append(f"### {criterion_name}\n")
 
         if not item.get('success', False):
