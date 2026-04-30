@@ -78,6 +78,15 @@ def init_debug_mode(config: dict):
     """Initialize debug mode if enabled."""
     global DEBUG_CONFIG, DEBUG_SESSION_DIR
     debug_mode = config.get('debug_mode', {})
+    if os.environ.get('AI_DEBUG'):
+        debug_mode = {
+            **debug_mode,
+            'enabled': True,
+            'save_context': True,
+            'save_prompts': True,
+            'save_responses': True,
+            'save_api_metadata': True,
+        }
     if not debug_mode.get('enabled', False):
         return
     DEBUG_CONFIG = debug_mode

@@ -207,6 +207,8 @@ def main():
                         help='Parse .qmd source directly, ignoring rendered HTML output')
     parser.add_argument('--verbose', action='store_true',
                         help='Stream subprocess output live')
+    parser.add_argument('--debug', action='store_true',
+                        help='Save prompts, responses, and metadata to .github/debug/ for each criterion')
 
     parser.add_argument('--docker', action='store_true',
                         help='Use Docker for Quarto rendering')
@@ -257,6 +259,7 @@ def main():
             scoring=args.scoring,
             disable_json_mode=args.disable_json_mode,
             force_qmd=args.force_qmd,
+            debug=args.debug,
             verbose=args.verbose,
         )
         if result and result.get('success'):

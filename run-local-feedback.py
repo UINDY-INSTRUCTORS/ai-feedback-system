@@ -198,7 +198,8 @@ def run_feedback_pipeline(repo_path: Path, output_path: Path = None,
                           use_docker: bool = False, skip_render: bool = False,
                           docker_image: str = None, docker_quarto: str = None,
                           scoring: bool = None, disable_json_mode: bool = False,
-                          force_qmd: bool = False, verbose: bool = False):
+                          force_qmd: bool = False, debug: bool = False,
+                          verbose: bool = False):
     """Run the complete feedback pipeline for a repo.
 
     Returns:
@@ -237,6 +238,8 @@ def run_feedback_pipeline(repo_path: Path, output_path: Path = None,
             env['AI_MODEL'] = model
         if disable_json_mode:
             env['AI_DISABLE_JSON_MODE'] = 'true'
+        if debug:
+            env['AI_DEBUG'] = '1'
         if force_qmd:
             env['PARSE_SOURCE'] = 'qmd'
         if scoring is not None:
@@ -623,6 +626,8 @@ def main():
     # Diagnostics
     parser.add_argument('--verbose', action='store_true',
                        help='Stream subprocess output live (shows per-criterion progress, tokens, timing)')
+    parser.add_argument('--debug', action='store_true',
+                       help='Save prompts, responses, and metadata to .github/debug/ for each criterion')
 
     # Model listing
     parser.add_argument('--list-models', nargs='?', const='http://localhost:1234/v1',
@@ -715,6 +720,7 @@ def main():
                                            scoring=args.scoring,
                                            disable_json_mode=args.disable_json_mode,
                                            force_qmd=args.force_qmd,
+                                           debug=args.debug,
                                            verbose=args.verbose)
             if result and result.get('success'):
                 successful += 1
@@ -784,6 +790,7 @@ def main():
                                                scoring=args.scoring,
                                                disable_json_mode=args.disable_json_mode,
                                                force_qmd=args.force_qmd,
+                                           debug=args.debug,
                                                verbose=args.verbose)
                 if result['success']:
                     successful += 1
