@@ -267,6 +267,8 @@ def main():
 
     parser.add_argument('--levels-only', action='store_true',
                         help='Classify rubric level only — skip prose feedback (faster, cheaper)')
+    parser.add_argument('--extract-only', action='store_true',
+                        help='Run extraction step only — write per-repo extraction.md, no AI feedback calls')
 
     parser.add_argument('--rubric-dir', metavar='DIR',
                         help='Directory containing rubric.yml / RUBRIC.md / guidance.md to inject '
@@ -328,6 +330,7 @@ def main():
               debug=args.debug,
               verbose=args.verbose,
               levels_only=args.levels_only,
+              extract_only=args.extract_only,
           )
         finally:
             if rubric_dir:

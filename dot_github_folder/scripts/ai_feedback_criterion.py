@@ -631,6 +631,55 @@ Be specific and use the actual criterion names above. Do not use bullet points; 
     }
 
 
+def _run_extract_only(rubric: dict, guidance: str, report: dict,
+                      config: dict, provider_config: dict) -> None:
+    """Extract relevant sections for each criterion and write a readable report.
+
+    Runs the extraction AI (cheap) but skips the feedback AI (expensive).
+    Output is written to extraction.md in the current directory.
+    """
+    criteria = rubric.get('criteria', [])
+    out_path = Path(os.environ.get('EXTRACT_OUTPUT_PATH', 'extraction.md'))
+    repo_name = Path.cwd().name
+
+    print(f"\nExtract-only mode: running extraction for {len(criteria)} criteria...\n")
+
+    lines = [
+        f'# Extraction Report: {repo_name}',
+        f'Generated: {datetime.now().strftime("%Y-%m-%d %H:%M")}',
+        f'Criteria: {len(criteria)}',
+        '',
+    ]
+
+    for i, criterion in enumerate(criteria, 1):
+        name = criterion['name']
+        weight = criterion.get('weight', 0)
+        keywords = criterion.get('keywords', [])
+        print(f"  Extracting [{i}/{len(criteria)}]: {name}")
+
+        try:
+            guidance_excerpt = get_criterion_guidance(guidance, criterion)
+            _, context, image_paths = build_criterion_prompt(
+                report, criterion, guidance_excerpt, config,
+                provider_config=provider_config,
+            )
+        except Exception as e:
+            context = f'[EXTRACTION ERROR: {e}]'
+            image_paths = []
+
+        lines += [
+            f'## {i}. {name} ({weight}%)',
+        ]
+        if keywords:
+            lines.append(f'*Keywords: {", ".join(str(k) for k in keywords)}*')
+        if image_paths:
+            lines.append(f'*Images found: {len(image_paths)}*')
+        lines += ['', '```', context.strip(), '```', '']
+
+    out_path.write_text('\n'.join(lines))
+    print(f"\nExtraction report: {out_path}")
+
+
 def main():
     """Generate AI feedback for all criteria."""
     start_time = datetime.now().timestamp()
@@ -647,6 +696,12 @@ def main():
     provider_config = resolve_provider_config(config)
     print(f"\nProvider configuration:")
     print_provider_info(provider_config)
+
+    extract_only = os.environ.get('EXTRACT_ONLY', '').lower() in ('1', 'true', 'yes')
+
+    if extract_only:
+        _run_extract_only(rubric, guidance, report, config, provider_config)
+        return
 
     print(f"\nAnalyzing {len(rubric.get('criteria', []))} criteria...\n")
 

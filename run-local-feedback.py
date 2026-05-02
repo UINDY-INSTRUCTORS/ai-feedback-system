@@ -199,7 +199,8 @@ def run_feedback_pipeline(repo_path: Path, output_path: Path = None,
                           docker_image: str = None, docker_quarto: str = None,
                           scoring: bool = None, disable_json_mode: bool = False,
                           force_qmd: bool = False, debug: bool = False,
-                          verbose: bool = False, levels_only: bool = False):
+                          verbose: bool = False, levels_only: bool = False,
+                          extract_only: bool = False):
     """Run the complete feedback pipeline for a repo.
 
     Returns:
@@ -242,6 +243,10 @@ def run_feedback_pipeline(repo_path: Path, output_path: Path = None,
             env['AI_DEBUG'] = '1'
         if force_qmd:
             env['PARSE_SOURCE'] = 'qmd'
+        if extract_only:
+            env['EXTRACT_ONLY'] = '1'
+            out = output_path or Path('extraction.md')
+            env['EXTRACT_OUTPUT_PATH'] = str(out.parent / 'extraction.md') if output_path else 'extraction.md'
         if levels_only:
             env['LEVELS_ONLY'] = '1'
             env['SCORING_ENABLED'] = 'false'  # levels-only implies no numerical scores
@@ -311,6 +316,15 @@ def run_feedback_pipeline(repo_path: Path, output_path: Path = None,
         if result.stdout and not verbose:
             print(result.stdout)
         print("✓ Feedback generated")
+
+        # Extract-only: skip create_issue, return extraction path
+        if extract_only:
+            extract_path = Path(env.get('EXTRACT_OUTPUT_PATH', 'extraction.md'))
+            if not extract_path.is_absolute():
+                extract_path = repo_path / extract_path
+            print(f"\n✅ Extraction complete: {extract_path}")
+            return {'success': True, 'scores': {'repo': repo_path.name, 'criteria': {}},
+                    'extraction_path': str(extract_path)}
 
         # Step 5: Create issue or save to file
         print("\n5️⃣  Saving feedback...")
