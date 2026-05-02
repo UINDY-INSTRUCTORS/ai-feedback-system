@@ -19,6 +19,7 @@ import copy
 import csv
 import importlib.util
 import os
+import shutil
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -38,6 +39,38 @@ find_repos_from_pdf_dir      = _rlf.find_repos_from_pdf_dir
 
 SCRIPT_DIR = _HERE / 'dot_github_folder' / 'scripts'
 sys.path.insert(0, str(SCRIPT_DIR))
+
+
+# ---------------------------------------------------------------------------
+# Rubric injection (--rubric-dir)
+# ---------------------------------------------------------------------------
+
+def _inject_rubric(repo_path: Path, rubric_dir: Path) -> dict:
+    """Copy rubric files into repo/.github/feedback/, backing up originals.
+
+    Returns a backup dict {filename: original_bytes | None} used by _restore_rubric.
+    """
+    feedback_dir = repo_path / '.github' / 'feedback'
+    feedback_dir.mkdir(parents=True, exist_ok=True)
+    backups = {}
+    for src in rubric_dir.iterdir():
+        if not src.is_file():
+            continue
+        dst = feedback_dir / src.name
+        backups[src.name] = dst.read_bytes() if dst.exists() else None
+        shutil.copy2(src, dst)
+    return backups
+
+
+def _restore_rubric(repo_path: Path, backups: dict) -> None:
+    """Undo _inject_rubric — restore originals or remove injected files."""
+    feedback_dir = repo_path / '.github' / 'feedback'
+    for fname, original in backups.items():
+        dst = feedback_dir / fname
+        if original is None:
+            dst.unlink(missing_ok=True)
+        else:
+            dst.write_bytes(original)
 
 
 # ---------------------------------------------------------------------------
@@ -235,6 +268,10 @@ def main():
     parser.add_argument('--levels-only', action='store_true',
                         help='Classify rubric level only — skip prose feedback (faster, cheaper)')
 
+    parser.add_argument('--rubric-dir', metavar='DIR',
+                        help='Directory containing rubric.yml / RUBRIC.md / guidance.md to inject '
+                             'into each repo before processing (originals are restored after).')
+
     parser.add_argument('--output', metavar='DIR',
                         help='Output directory (default: batch-feedback-<timestamp>/)')
 
@@ -263,28 +300,39 @@ def main():
         print(f'Profile: {args.profile}')
     print()
 
+    rubric_dir = Path(args.rubric_dir).resolve() if args.rubric_dir else None
+    if rubric_dir and not rubric_dir.is_dir():
+        print(f'--rubric-dir not found: {rubric_dir}', file=sys.stderr)
+        sys.exit(1)
+
     all_scores = []
     ok = 0
     failed = 0
 
     for repo in repos:
-        result = run_feedback_pipeline(
-            repo,
-            output_path=out_dir / repo.name / 'feedback.md',
-            profile=args.profile,
-            provider=args.provider,
-            model=args.model,
-            use_docker=args.docker,
-            skip_render=args.no_render,
-            docker_image=args.docker_image,
-            docker_quarto=args.docker_quarto,
-            scoring=args.scoring,
-            disable_json_mode=args.disable_json_mode,
-            force_qmd=args.force_qmd,
-            debug=args.debug,
-            verbose=args.verbose,
-            levels_only=args.levels_only,
-        )
+        backups = _inject_rubric(repo, rubric_dir) if rubric_dir else {}
+        try:
+          result = run_feedback_pipeline(
+              repo,
+              output_path=out_dir / repo.name / 'feedback.md',
+              profile=args.profile,
+              provider=args.provider,
+              model=args.model,
+              use_docker=args.docker,
+              skip_render=args.no_render,
+              docker_image=args.docker_image,
+              docker_quarto=args.docker_quarto,
+              scoring=args.scoring,
+              disable_json_mode=args.disable_json_mode,
+              force_qmd=args.force_qmd,
+              debug=args.debug,
+              verbose=args.verbose,
+              levels_only=args.levels_only,
+          )
+        finally:
+            if rubric_dir:
+                _restore_rubric(repo, backups)
+
         if result and result.get('success'):
             ok += 1
         else:

@@ -1,0 +1,110 @@
+assignment:
+  name: "P3: BJT and Op-Amp Amplifier"
+  course: "PHYS/MENG 230"
+  type: "lab"
+  total_points: 100
+
+criteria:
+  - id: abstract_description
+    name: "Abstract & Description"
+    weight: 10
+    description: |
+      Abstract names both experiments (BJT current gain measurement and op-amp
+      non-inverting amplifier), states the key numerical result (measured β),
+      and briefly explains the significance of the work.
+    levels:
+      excellent:
+        description: "Names both experiments; states numerical β; explains significance."
+        point_range: [7, 10]
+      good:
+        description: "Mentions both experiments and states β (uncertainty not required); description is thin."
+        point_range: [4, 6]
+      poor:
+        description: "Missing, vague, covers only one experiment, or states no numerical result."
+        point_range: [0, 3]
+    keywords: [abstract, description, beta, current gain, amplifier, op-amp, significance]
+
+  - id: circuit_schematic
+    name: "Circuit Schematic, Background and Discussion"
+    weight: 20
+    description: |
+      Documentation of both circuits: the BJT measurement setup (DAC → 10kΩ base
+      resistor → BJT, 100Ω collector resistor to 3.3V) and the op-amp non-inverting
+      amplifier. Component values should appear somewhere in the report.
+    levels:
+      excellent:
+        description: "A schematic present for each circuit; component values mentioned anywhere in the report."
+        point_range: [13, 20]
+      good:
+        description: "One schematic present; reasonable description or photo covers both circuits."
+        point_range: [7, 12]
+      poor:
+        description: "No schematics, no photos, and no description of either circuit."
+        point_range: [0, 6]
+    keywords: [schematic, circuit, BJT, transistor, op-amp, resistor, DAC, component, base, collector]
+
+  - id: circuit_function
+    name: "Circuit Function"
+    weight: 40
+    description: |
+      Evidence that both circuits operated correctly.
+      BJT: a DAC sweep producing Ib and Ic data across multiple operating points.
+      Op-amp: a scope trace showing input and amplified output signals.
+    levels:
+      excellent:
+        description: "Evidence both circuits worked: BJT DAC sweep data present AND op-amp scope trace present."
+        point_range: [26, 40]
+      good:
+        description: "Evidence that at least one circuit worked."
+        point_range: [14, 25]
+      poor:
+        description: "No evidence that either circuit worked."
+        point_range: [0, 13]
+    keywords: [data, sweep, DAC, scope, oscilloscope, trace, collector, base, current, voltage, Ib, Ic]
+
+  - id: results
+    name: "Results (including stats exercises)"
+    weight: 20
+    description: |
+      BJT analysis: non-linear data excluded (Vc at rails or saturation), linear fit
+      plotted with data aligning well, β extracted. Op-amp: scope trace confirms gain = 2.
+      Three stats exercises: (1) Bayesian dice posterior after observing 1,4,2,5;
+      (2) exponential distribution probability for defect between t=4.5 and 5.5 min;
+      (3) curve_fit to extract β ± δβ and compare to linear fit slope.
+    levels:
+      excellent:
+        description: |
+          BJT: non-linear data excluded, fit plotted and aligns well with data, β reported.
+          Op-amp: confirms gain = 2 from scope trace.
+          All three stats exercises seriously attempted.
+        point_range: [13, 20]
+      good:
+        description: |
+          BJT fit done but imperfect (non-linear data not excluded, or fit not well displayed).
+          Op-amp gain of 2 confirmed. One stats exercise missing or incomplete.
+        point_range: [7, 12]
+      poor:
+        description: |
+          No BJT fit evident; op-amp gain not validated; stats exercises absent or
+          not seriously attempted.
+        point_range: [0, 6]
+    keywords: [fit, curve_fit, beta, gain, Bayesian, posterior, exponential, linear, regression,
+               uncertainty, linear regime, saturation]
+
+  - id: conclusion
+    name: "Conclusion"
+    weight: 10
+    description: |
+      Conclusion states the measured β, notes whether the op-amp behaved as expected
+      (gain = 2), and includes a brief reflection on the experiments.
+    levels:
+      excellent:
+        description: "States measured β; notes op-amp behavior; includes reflection."
+        point_range: [7, 10]
+      good:
+        description: "Conclusion present and mentions β but thin — reflection or op-amp missing."
+        point_range: [4, 6]
+      poor:
+        description: "Conclusion missing or one vague sentence with no actual results stated."
+        point_range: [0, 3]
+    keywords: [conclusion, beta, current gain, op-amp, result, reflection, summary]
