@@ -123,12 +123,15 @@ def validate_vision_config(config: Dict, rubric: Dict) -> List[str]:
 
 
 def convert_rubric_if_needed() -> Tuple[bool, str]:
-    """Convert RUBRIC.md to rubric.yml if markdown version exists."""
+    """Convert RUBRIC.md to rubric.yml if markdown version exists and yml doesn't."""
     md_path = Path('.github/feedback/RUBRIC.md')
     yml_path = Path('.github/feedback/rubric.yml')
 
     if not md_path.exists():
         return True, "No RUBRIC.md to convert"
+
+    if yml_path.exists():
+        return True, "rubric.yml already exists, skipping conversion"
 
     try:
         markdown_to_yaml(str(md_path), str(yml_path))
