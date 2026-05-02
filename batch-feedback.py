@@ -32,8 +32,9 @@ _spec = importlib.util.spec_from_file_location('run_local_feedback', _RLF_PATH)
 _rlf = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_rlf)
 
-run_feedback_pipeline     = _rlf.run_feedback_pipeline
+run_feedback_pipeline        = _rlf.run_feedback_pipeline
 extract_scores_from_feedback = _rlf.extract_scores_from_feedback
+find_repos_from_pdf_dir      = _rlf.find_repos_from_pdf_dir
 
 SCRIPT_DIR = _HERE / 'dot_github_folder' / 'scripts'
 sys.path.insert(0, str(SCRIPT_DIR))
@@ -57,9 +58,14 @@ def _find_repos_in_dir(directory: Path) -> list[Path]:
                   if p.is_dir() and (p / 'index.qmd').exists())
 
 
-def load_repo_paths(repos_file, repos_dir) -> list[Path]:
+def load_repo_paths(repos_file, repos_dir,
+                    pdf_dir=None, submissions_dir=None) -> list[Path]:
     if repos_file:
         return _load_repos_from_file(repos_file)
+    if pdf_dir is not None:
+        if submissions_dir is None:
+            raise ValueError('--submissions-dir is required when --pdf-dir is specified')
+        return find_repos_from_pdf_dir(Path(pdf_dir), Path(submissions_dir))
     return _find_repos_in_dir(Path(repos_dir).resolve())
 
 
@@ -194,6 +200,11 @@ def main():
                             help='File of repo paths (one per line). Use - for stdin.')
     repo_group.add_argument('--repos-dir', metavar='DIR',
                             help='Discover all subdirs of DIR that contain index.qmd.')
+    repo_group.add_argument('--pdf-dir', metavar='DIR',
+                            help='Directory of student PDFs; pairs with --submissions-dir.')
+
+    parser.add_argument('--submissions-dir', metavar='DIR',
+                        help='Directory of submission repos (required with --pdf-dir).')
 
     parser.add_argument('--profile', metavar='NAME',
                         help='Named provider profile from ~/.ai-feedback/config.yml')
@@ -221,12 +232,23 @@ def main():
     scoring_group.add_argument('--no-scoring', dest='scoring', action='store_false',
                                help='Show rubric levels in summary table (default)')
 
+    parser.add_argument('--levels-only', action='store_true',
+                        help='Classify rubric level only — skip prose feedback (faster, cheaper)')
+
     parser.add_argument('--output', metavar='DIR',
                         help='Output directory (default: batch-feedback-<timestamp>/)')
 
     args = parser.parse_args()
 
-    repos = load_repo_paths(args.repos, args.repos_dir)
+    if args.pdf_dir and not args.submissions_dir:
+        parser.error('--submissions-dir is required when --pdf-dir is specified')
+
+    repos = load_repo_paths(
+        repos_file=args.repos,
+        repos_dir=args.repos_dir,
+        pdf_dir=args.pdf_dir,
+        submissions_dir=args.submissions_dir,
+    )
     if not repos:
         print('No repos found.', file=sys.stderr)
         sys.exit(1)
@@ -261,6 +283,7 @@ def main():
             force_qmd=args.force_qmd,
             debug=args.debug,
             verbose=args.verbose,
+            levels_only=args.levels_only,
         )
         if result and result.get('success'):
             ok += 1

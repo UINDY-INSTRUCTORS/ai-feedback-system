@@ -199,7 +199,7 @@ def run_feedback_pipeline(repo_path: Path, output_path: Path = None,
                           docker_image: str = None, docker_quarto: str = None,
                           scoring: bool = None, disable_json_mode: bool = False,
                           force_qmd: bool = False, debug: bool = False,
-                          verbose: bool = False):
+                          verbose: bool = False, levels_only: bool = False):
     """Run the complete feedback pipeline for a repo.
 
     Returns:
@@ -242,7 +242,10 @@ def run_feedback_pipeline(repo_path: Path, output_path: Path = None,
             env['AI_DEBUG'] = '1'
         if force_qmd:
             env['PARSE_SOURCE'] = 'qmd'
-        if scoring is not None:
+        if levels_only:
+            env['LEVELS_ONLY'] = '1'
+            env['SCORING_ENABLED'] = 'false'  # levels-only implies no numerical scores
+        elif scoring is not None:
             env['SCORING_ENABLED'] = 'true' if scoring else 'false'
 
         if output_path:
@@ -623,6 +626,9 @@ def main():
     scoring_group.add_argument('--no-scoring', dest='scoring', action='store_false',
                                help='Disable numerical scoring, show rubric levels (overrides repo config)')
 
+    parser.add_argument('--levels-only', action='store_true',
+                        help='Classify rubric level only — skip prose feedback (faster, cheaper)')
+
     # Diagnostics
     parser.add_argument('--verbose', action='store_true',
                        help='Stream subprocess output live (shows per-criterion progress, tokens, timing)')
@@ -721,7 +727,8 @@ def main():
                                            disable_json_mode=args.disable_json_mode,
                                            force_qmd=args.force_qmd,
                                            debug=args.debug,
-                                           verbose=args.verbose)
+                                           verbose=args.verbose,
+                                           levels_only=args.levels_only)
             if result and result.get('success'):
                 successful += 1
             else:
@@ -790,8 +797,9 @@ def main():
                                                scoring=args.scoring,
                                                disable_json_mode=args.disable_json_mode,
                                                force_qmd=args.force_qmd,
-                                           debug=args.debug,
-                                               verbose=args.verbose)
+                                               debug=args.debug,
+                                               verbose=args.verbose,
+                                               levels_only=args.levels_only)
                 if result['success']:
                     successful += 1
                 else:
@@ -830,7 +838,8 @@ def main():
                                     scoring=args.scoring,
                                     disable_json_mode=args.disable_json_mode,
                                     force_qmd=args.force_qmd,
-                                    verbose=args.verbose)
+                                    verbose=args.verbose,
+                                    levels_only=args.levels_only)
     sys.exit(0 if result['success'] else 1)
 
 if __name__ == '__main__':

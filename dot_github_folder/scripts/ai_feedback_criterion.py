@@ -240,6 +240,9 @@ def build_criterion_prompt(report: dict, criterion: dict, guidance_excerpt: str,
 
     max_score = criterion.get('weight', 0)
 
+    # Check if levels-only mode is enabled (classify only, no prose feedback)
+    levels_only = os.environ.get('LEVELS_ONLY', '').lower() in ('1', 'true', 'yes')
+
     # Check if numerical scoring is enabled (defaults to false for formative assessment)
     # Env var SCORING_ENABLED overrides config (for batch/local runs)
     scoring_env = os.environ.get('SCORING_ENABLED')
@@ -248,8 +251,10 @@ def build_criterion_prompt(report: dict, criterion: dict, guidance_excerpt: str,
     else:
         scoring_enabled = config.get('feedback', {}).get('scoring_enabled', False)
 
-    # Build JSON schema based on scoring setting
-    if scoring_enabled:
+    if levels_only:
+        json_schema = '{\n  "overall_assessment": "<The rubric level that best describes this work — use the exact level name from the rubric above>"\n}'
+        scoring_instruction = "Return only the level name that best describes the work. Do not include any other fields."
+    elif scoring_enabled:
         json_schema = f"""{{
   "summary": "A concise, one-paragraph summary of your overall assessment for this criterion.",
   "strengths": [

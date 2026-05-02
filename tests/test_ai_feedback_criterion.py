@@ -179,3 +179,85 @@ class TestAnalyzeCriterion:
 
         result = analyze_criterion(report, criterion, "g", {}, criterion_index=1, provider_config=pc)
         assert result["success"] is True
+
+
+# ============================================================================
+# build_criterion_prompt — levels-only mode
+# ============================================================================
+
+@pytest.mark.deterministic
+@pytest.mark.unit
+class TestBuildCriterionPromptLevelsOnly:
+    """Tests for LEVELS_ONLY env-var mode in build_criterion_prompt."""
+
+    def _criterion(self):
+        return {
+            "id": "abstract",
+            "name": "Abstract & Description",
+            "weight": 10,
+            "description": "Abstract clearly states the project.",
+            "levels": {
+                "excellent": {"description": "Clear and precise.", "point_range": [7, 10]},
+                "good":      {"description": "Present with merit.", "point_range": [4, 6]},
+                "poor":      {"description": "Missing or unclear.", "point_range": [0, 3]},
+            },
+        }
+
+    def _report(self):
+        return {"content": "Some report text.", "metadata": {}, "structure": []}
+
+    def _config(self):
+        return {"model": {"extractor": "gpt-4o-mini"}}
+
+    @patch('ai_feedback_criterion.extract_sections_for_criterion_ai')
+    def test_levels_only_schema_has_only_overall_assessment(self, mock_extract, monkeypatch):
+        """LEVELS_ONLY=1 produces a JSON schema with only overall_assessment."""
+        mock_extract.return_value = ("Report content here.", [], {})
+        monkeypatch.setenv("LEVELS_ONLY", "1")
+        monkeypatch.delenv("SCORING_ENABLED", raising=False)
+
+        from ai_feedback_criterion import build_criterion_prompt
+        prompt, _, _ = build_criterion_prompt(self._report(), self._criterion(), "guidance", self._config())
+
+        assert '"overall_assessment"' in prompt
+        assert '"summary"' not in prompt
+        assert '"strengths"' not in prompt
+        assert '"areas_for_improvement"' not in prompt
+        assert '"score"' not in prompt
+
+    @patch('ai_feedback_criterion.extract_sections_for_criterion_ai')
+    def test_levels_only_instruction_mentions_level_name(self, mock_extract, monkeypatch):
+        """LEVELS_ONLY=1 prompt instructs the AI to return a level name verbatim."""
+        mock_extract.return_value = ("content", [], {})
+        monkeypatch.setenv("LEVELS_ONLY", "1")
+        monkeypatch.delenv("SCORING_ENABLED", raising=False)
+
+        from ai_feedback_criterion import build_criterion_prompt
+        prompt, _, _ = build_criterion_prompt(self._report(), self._criterion(), "guidance", self._config())
+
+        # Should direct the AI to pick the exact level name
+        assert "level" in prompt.lower() or "overall_assessment" in prompt
+
+    @patch('ai_feedback_criterion.extract_sections_for_criterion_ai')
+    def test_normal_mode_unaffected(self, mock_extract, monkeypatch):
+        """When LEVELS_ONLY is absent, the normal schema is used."""
+        mock_extract.return_value = ("content", [], {})
+        monkeypatch.delenv("LEVELS_ONLY", raising=False)
+        monkeypatch.delenv("SCORING_ENABLED", raising=False)
+
+        from ai_feedback_criterion import build_criterion_prompt
+        prompt, _, _ = build_criterion_prompt(self._report(), self._criterion(), "guidance", self._config())
+
+        assert '"summary"' in prompt
+        assert '"strengths"' in prompt
+        assert '"areas_for_improvement"' in prompt
+
+    @patch('ai_feedback_criterion.extract_sections_for_criterion_ai')
+    def test_levels_only_truthy_values(self, mock_extract, monkeypatch):
+        """LEVELS_ONLY accepts '1', 'true', 'yes' as truthy."""
+        mock_extract.return_value = ("content", [], {})
+        for val in ("1", "true", "yes", "True", "YES"):
+            monkeypatch.setenv("LEVELS_ONLY", val)
+            from ai_feedback_criterion import build_criterion_prompt
+            prompt, _, _ = build_criterion_prompt(self._report(), self._criterion(), "guidance", self._config())
+            assert '"summary"' not in prompt, f"LEVELS_ONLY={val!r} should suppress summary"
