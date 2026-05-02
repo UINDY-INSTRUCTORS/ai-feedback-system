@@ -269,6 +269,9 @@ def main():
                         help='Classify rubric level only — skip prose feedback (faster, cheaper)')
     parser.add_argument('--extract-only', action='store_true',
                         help='Run extraction step only — write per-repo extraction.md, no AI feedback calls')
+    parser.add_argument('--use-extractions', metavar='DIR',
+                        help='Re-use extraction.json files from a previous --extract-only run '
+                             '(skips extractor calls, runs feedback AI only)')
 
     parser.add_argument('--rubric-dir', metavar='DIR',
                         help='Directory containing rubric.yml / RUBRIC.md / guidance.md to inject '
@@ -307,6 +310,11 @@ def main():
         print(f'--rubric-dir not found: {rubric_dir}', file=sys.stderr)
         sys.exit(1)
 
+    extractions_dir = Path(args.use_extractions).resolve() if args.use_extractions else None
+    if extractions_dir and not extractions_dir.is_dir():
+        print(f'--use-extractions not found: {extractions_dir}', file=sys.stderr)
+        sys.exit(1)
+
     all_scores = []
     ok = 0
     failed = 0
@@ -331,6 +339,8 @@ def main():
               verbose=args.verbose,
               levels_only=args.levels_only,
               extract_only=args.extract_only,
+              extraction_cache=(extractions_dir / repo.name / 'extraction.json'
+                                if extractions_dir else None),
           )
         finally:
             if rubric_dir:

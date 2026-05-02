@@ -227,10 +227,25 @@ def build_criterion_prompt(report: dict, criterion: dict, guidance_excerpt: str,
     Returns:
         tuple: (prompt, context, image_paths)
     """
-    extraction_model = config.get('model', {}).get('extractor', 'gpt-4o-mini')
-    relevant_content, image_paths, _ = extract_sections_for_criterion_ai(
-        report, criterion, config, model=extraction_model, provider_config=provider_config
-    )
+    # Use cached extraction if available (set via EXTRACTION_CACHE env var)
+    criterion_id = criterion.get('id', '')
+    _cache_file = os.environ.get('EXTRACTION_CACHE', '')
+    _cached = None
+    if _cache_file:
+        try:
+            _cached = json.load(open(_cache_file)).get('criteria', {}).get(criterion_id)
+        except Exception:
+            pass
+
+    if _cached:
+        print(f"   Using cached extraction.")
+        relevant_content = _cached['context']
+        image_paths = _cached.get('image_paths', [])
+    else:
+        extraction_model = config.get('model', {}).get('extractor', 'gpt-4o-mini')
+        relevant_content, image_paths, _ = extract_sections_for_criterion_ai(
+            report, criterion, config, model=extraction_model, provider_config=provider_config
+        )
 
     levels_text = ""
     levels = criterion.get('levels', {})
@@ -640,6 +655,7 @@ def _run_extract_only(rubric: dict, guidance: str, report: dict,
     """
     criteria = rubric.get('criteria', [])
     out_path = Path(os.environ.get('EXTRACT_OUTPUT_PATH', 'extraction.md'))
+    json_path = out_path.with_suffix('.json')
     repo_name = Path.cwd().name
 
     print(f"\nExtract-only mode: running extraction for {len(criteria)} criteria...\n")
@@ -650,9 +666,15 @@ def _run_extract_only(rubric: dict, guidance: str, report: dict,
         f'Criteria: {len(criteria)}',
         '',
     ]
+    cache = {
+        'repo': repo_name,
+        'extracted_at': datetime.now().isoformat(),
+        'criteria': {},
+    }
 
     for i, criterion in enumerate(criteria, 1):
         name = criterion['name']
+        criterion_id = criterion.get('id', f'criterion_{i}')
         weight = criterion.get('weight', 0)
         keywords = criterion.get('keywords', [])
         print(f"  Extracting [{i}/{len(criteria)}]: {name}")
@@ -667,9 +689,13 @@ def _run_extract_only(rubric: dict, guidance: str, report: dict,
             context = f'[EXTRACTION ERROR: {e}]'
             image_paths = []
 
-        lines += [
-            f'## {i}. {name} ({weight}%)',
-        ]
+        cache['criteria'][criterion_id] = {
+            'name': name,
+            'context': context,
+            'image_paths': image_paths,
+        }
+
+        lines += [f'## {i}. {name} ({weight}%)']
         if keywords:
             lines.append(f'*Keywords: {", ".join(str(k) for k in keywords)}*')
         if image_paths:
@@ -677,7 +703,9 @@ def _run_extract_only(rubric: dict, guidance: str, report: dict,
         lines += ['', '```', context.strip(), '```', '']
 
     out_path.write_text('\n'.join(lines))
-    print(f"\nExtraction report: {out_path}")
+    json_path.write_text(json.dumps(cache, indent=2))
+    print(f"\nExtraction report : {out_path}")
+    print(f"Extraction cache  : {json_path}")
 
 
 def main():

@@ -200,7 +200,8 @@ def run_feedback_pipeline(repo_path: Path, output_path: Path = None,
                           scoring: bool = None, disable_json_mode: bool = False,
                           force_qmd: bool = False, debug: bool = False,
                           verbose: bool = False, levels_only: bool = False,
-                          extract_only: bool = False):
+                          extract_only: bool = False,
+                          extraction_cache: Path = None):
     """Run the complete feedback pipeline for a repo.
 
     Returns:
@@ -243,6 +244,8 @@ def run_feedback_pipeline(repo_path: Path, output_path: Path = None,
             env['AI_DEBUG'] = '1'
         if force_qmd:
             env['PARSE_SOURCE'] = 'qmd'
+        if extraction_cache:
+            env['EXTRACTION_CACHE'] = str(Path(extraction_cache).resolve())
         if extract_only:
             env['EXTRACT_ONLY'] = '1'
             out = output_path or Path('extraction.md')
