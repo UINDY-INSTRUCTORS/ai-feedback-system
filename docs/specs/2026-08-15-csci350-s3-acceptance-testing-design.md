@@ -81,8 +81,11 @@ The test code is public; the specific cases are not enumerable in advance.
 - **Math Parser** — generate random well-formed expressions from the assignment grammar and
   compare the student's evaluator against the host language's own arithmetic. No reference
   implementation is needed; the oracle is free.
-- **Lisp Interpreter** — `clisp` is already present in the course devcontainer image, so a
-  real Common Lisp serves as the oracle for generated forms.
+- **Lisp Interpreter** — the course image already carries **SBCL** (Common Lisp) and
+  **Racket** (Scheme), so a real implementation serves as the oracle for generated forms.
+  Which one depends on the dialect decision still open in the course plan §4b(e); the oracle
+  is available either way, so this design does not block on it. (Note: `clisp` appears in
+  Paul's inherited `Lisp-Playground` devcontainer, not in the course image.)
 - **Malformed input** — generate garbage within and around the grammar and assert the student
   errors deliberately rather than crashing with an unhandled stack trace.
 
