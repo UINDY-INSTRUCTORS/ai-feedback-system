@@ -5,17 +5,20 @@ Check .qmd files for embed problems and common syntax gotchas.
 Checks performed:
   1. Front matter YAML: parses the YAML front matter block and reports syntax errors
   2. Embed references: verifies tags/labels exist in the target notebook
-  3. Code fence + hr collision: '---' immediately after closing '```'
+  3. Commented-out embeds: embed shortcodes wrapped in <!-- --> or inside
+     inline code spans (backtick-delimited) are excluded from embed checks;
+     commented-out embeds are flagged so accidentally-disabled content is visible
+  4. Code fence + hr collision: '---' immediately after closing '```'
      (no blank line) can be misparsed as a YAML delimiter
-  3. Unclosed code fences: odd number of fence markers means one is missing
-  4. Unclosed callout divs: ':::' divs that are opened but never closed
-  5. Ambiguous '---': a '---' not inside front matter that lacks a blank
+  5. Unclosed code fences: odd number of fence markers means one is missing
+  6. Unclosed callout divs: ':::' divs that are opened but never closed
+  7. Ambiguous '---': a '---' not inside front matter that lacks a blank
      line before it may be misparsed as a YAML delimiter
-  6. Missing blank lines around shortcodes: shortcodes like embed may be
+  8. Missing blank lines around shortcodes: shortcodes like embed may be
      silently ignored if not separated from surrounding content
-  7. Duplicate notebook tags: two cells sharing the same tag in a notebook
+  9. Duplicate notebook tags: two cells sharing the same tag in a notebook
      referenced by an embed — Quarto may not resolve the right cell
-  8. Embedded setext heading: an embedded cell's stream output has a line
+ 10. Embedded setext heading: an embedded cell's stream output has a line
      with '|' followed by an all-dashes line — pandoc parses this as a
      heading, breaking Quarto's embed div wrapper and causing Lua warnings
 
@@ -37,17 +40,57 @@ import yaml
 # Embed checks
 # ---------------------------------------------------------------------------
 
+def _strip_html_comments(line: str) -> str:
+    """Remove single-line HTML comment regions from a line."""
+    return re.sub(r'<!--.*?-->', '', line)
+
+
+def _strip_inline_code(line: str) -> str:
+    """Remove inline code spans (backtick-delimited) from a line.
+
+    Uses a backreference so the same number of opening backticks must close
+    the span, matching CommonMark semantics (e.g. ``code`` or `code`).
+    """
+    return re.sub(r'(`+)(.*?)\1', '', line)
+
+
 def parse_embeds(qmd_path: Path) -> list[dict]:
     """Extract all embed references from a .qmd file.
+
+    Embeds inside HTML comments (<!-- ... -->), inline code spans (`...`),
+    or fenced code blocks are excluded; use check_commented_out_embeds to
+    detect accidentally-disabled embeds separately.
 
     Returns a list of dicts with keys: notebook, tag, line_num, raw.
     """
     embed_pattern = re.compile(
         r"\{\{<\s*embed\s+(\S+?)#(\S+?)(?:\s+[^>]*)?\s*>\}\}"
     )
+    fence_re = re.compile(r'^(`{3,}|~{3,})')
     embeds = []
+    in_fence = False
+    open_fence = None  # (char, min_length)
+
     for line_num, line in enumerate(qmd_path.read_text().splitlines(), start=1):
-        for m in embed_pattern.finditer(line):
+        stripped = line.strip()
+        fm = fence_re.match(stripped)
+        if fm:
+            marker = fm.group(1)
+            if not in_fence:
+                in_fence = True
+                open_fence = (marker[0], len(marker))
+            elif (marker[0] == open_fence[0]
+                  and len(marker) >= open_fence[1]
+                  and stripped[len(marker):].strip() == ''):
+                in_fence = False
+                open_fence = None
+            continue  # fence marker lines never contain valid embeds
+
+        if in_fence:
+            continue
+
+        clean = _strip_inline_code(_strip_html_comments(line))
+        for m in embed_pattern.finditer(clean):
             embeds.append({
                 "notebook": m.group(1),
                 "tag": m.group(2),
@@ -113,7 +156,16 @@ def check_embeds(qmd_path: Path) -> list[dict]:
                 })
             continue
 
-        identifiers = get_notebook_identifiers(nb_path)
+        try:
+            identifiers = get_notebook_identifiers(nb_path)
+        except json.JSONDecodeError as e:
+            for embed in nb_embeds:
+                issues.append({
+                    "check": "embed",
+                    "line_num": embed["line_num"],
+                    "issue": f"Could not parse notebook {nb_name}: invalid JSON ({e})",
+                })
+            continue
 
         for embed in nb_embeds:
             tag = embed["tag"]
@@ -128,6 +180,54 @@ def check_embeds(qmd_path: Path) -> list[dict]:
                     "issue": f"Tag/label '{tag}' not found in {nb_name}{hint}",
                 })
 
+    return issues
+
+
+def check_commented_out_embeds(qmd_path: Path) -> list[dict]:
+    """Detect embed shortcodes wrapped in HTML comment markers (<!-- ... -->).
+
+    Students sometimes comment out embeds while debugging; this flags those
+    lines so silently-disabled content doesn't go unnoticed.  Lines inside
+    fenced code blocks or inline code spans are skipped.
+    """
+    commented_embed_re = re.compile(
+        r"<!--.*\{\{<\s*embed\s+(\S+?)#(\S+?)(?:\s+[^>]*)?\s*>\}\}.*-->"
+    )
+    fence_re = re.compile(r'^(`{3,}|~{3,})')
+    issues = []
+    in_fence = False
+    open_fence = None
+
+    for line_num, line in enumerate(qmd_path.read_text().splitlines(), start=1):
+        stripped = line.strip()
+        fm = fence_re.match(stripped)
+        if fm:
+            marker = fm.group(1)
+            if not in_fence:
+                in_fence = True
+                open_fence = (marker[0], len(marker))
+            elif (marker[0] == open_fence[0]
+                  and len(marker) >= open_fence[1]
+                  and stripped[len(marker):].strip() == ''):
+                in_fence = False
+                open_fence = None
+            continue
+
+        if in_fence:
+            continue
+
+        # Strip inline code spans so embeds inside backticks aren't flagged
+        clean = _strip_inline_code(line)
+        for m in commented_embed_re.finditer(clean):
+            issues.append({
+                "check": "embed",
+                "line_num": line_num,
+                "issue": (
+                    f"Embed '{m.group(1)}#{m.group(2)}' is commented out with "
+                    f"HTML comment syntax (<!-- ... -->). Remove the comment "
+                    f"markers to re-enable it, or delete the line if it is not needed."
+                ),
+            })
     return issues
 
 
@@ -152,8 +252,11 @@ def check_embedded_setext_heading(qmd_path: Path) -> list[dict]:
         nb_path = qmd_path.parent / embed["notebook"]
         if not nb_path.exists():
             continue
-        with open(nb_path) as f:
-            nb = json.load(f)
+        try:
+            with open(nb_path) as f:
+                nb = json.load(f)
+        except json.JSONDecodeError:
+            continue
 
         for cell in nb["cells"]:
             tags = cell.get("metadata", {}).get("tags", [])
@@ -199,8 +302,11 @@ def check_duplicate_notebook_tags(qmd_path: Path) -> list[dict]:
         if not nb_path.exists():
             continue
 
-        with open(nb_path) as f:
-            nb = json.load(f)
+        try:
+            with open(nb_path) as f:
+                nb = json.load(f)
+        except json.JSONDecodeError:
+            continue
 
         tag_cells: dict[str, list[int]] = {}
         for i, cell in enumerate(nb["cells"]):
@@ -508,6 +614,43 @@ def check_trailing_hr_no_newline(qmd_path: Path) -> list[dict]:
     return []
 
 
+def check_missing_images(qmd_path: Path) -> list[dict]:
+    """Detect image references whose files do not exist on disk.
+
+    Checks Markdown syntax ![alt](path) and HTML <img src="path"> tags.
+    Only local paths (no http:// or https://) are verified.
+    """
+    md_image_re = re.compile(r"!\[(?:[^\]]*)\]\(([^)]+)\)")
+    html_img_re = re.compile(r'<img\s[^>]*src=["\']([^"\']+)["\']', re.IGNORECASE)
+
+    issues = []
+    lines = qmd_path.read_text().splitlines()
+    in_fence = False
+
+    for line_num, line in enumerate(lines, start=1):
+        stripped = line.strip()
+        if re.match(r"^(`{3,}|~{3,})", stripped):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+
+        for pattern in (md_image_re, html_img_re):
+            for m in pattern.finditer(line):
+                path_str = m.group(1).split()[0]  # drop any title after a space
+                if path_str.startswith(("http://", "https://", "/")):
+                    continue
+                img_path = qmd_path.parent / path_str
+                if not img_path.exists():
+                    issues.append({
+                        "check": "image",
+                        "line_num": line_num,
+                        "issue": f"Image file not found: {path_str}",
+                    })
+
+    return issues
+
+
 def check_shortcode_spacing(qmd_path: Path) -> list[dict]:
     """Detect shortcodes ({{< ... >}}) lacking blank lines before/after.
 
@@ -570,6 +713,7 @@ def check_shortcode_spacing(qmd_path: Path) -> list[dict]:
 ALL_CHECKS = [
     ("Front matter YAML", check_front_matter_yaml),
     ("Embed references", check_embeds),
+    ("Commented-out embeds", check_commented_out_embeds),
     ("Embedded setext heading", check_embedded_setext_heading),
     ("Duplicate notebook tags", check_duplicate_notebook_tags),
     ("Code fence + hr collision", check_fence_hr_collision),
@@ -578,6 +722,7 @@ ALL_CHECKS = [
     ("Ambiguous hr", check_ambiguous_hr),
     ("Trailing --- without newline", check_trailing_hr_no_newline),
     ("Shortcode spacing", check_shortcode_spacing),
+    ("Missing images", check_missing_images),
 ]
 
 
