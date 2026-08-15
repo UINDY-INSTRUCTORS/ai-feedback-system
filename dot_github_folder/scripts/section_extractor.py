@@ -178,9 +178,10 @@ def criterion_has_images(
     for fig in all_figures:
         if fig['source'].startswith('markdown:'):
             search_text = fig['caption'].lower()
-            if any(term.lower() in search_text for term in search_terms):
-                if validate_image_file(fig['path']):
-                    return True
+            caption_match = any(term.lower() in search_text for term in search_terms)
+            path_in_text = fig['path'] in extracted_text
+            if (caption_match or path_in_text) and validate_image_file(fig['path']):
+                return True
 
     # Strategy 4: HTML-sourced figures — check if relative src path appears in extracted text
     # (html2text produces ![caption](src) refs, so the path will be present for relevant sections)
@@ -325,7 +326,9 @@ def extract_relevant_images(
         # Only apply to manual images that aren't already found
         if fig['source'].startswith('markdown:') and fig['path'] not in relevant_images:
             search_text = fig['caption'].lower()
-            if any(term.lower() in search_text for term in search_terms):
+            caption_match = any(term.lower() in search_text for term in search_terms)
+            path_in_text = fig['path'] in extracted_text
+            if caption_match or path_in_text:
                 if validate_image_file(fig['path']):
                     priority = get_image_priority(fig, vision_config.get('image_priority', []))
                     relevant_images[fig['path']] = priority
@@ -416,6 +419,17 @@ def build_extraction_prompt(report: Dict[str, Any], criterion: Dict[str, Any]) -
         )
         max_content_note = ""
 
+    # Whether this criterion is specifically about the abstract/description
+    is_abstract_criterion = any(
+        kw in criterion_name.lower() for kw in ('abstract', 'description', 'introduction')
+    )
+    abstract_guidance = "" if is_abstract_criterion else (
+        "\n**CRITICAL: Do NOT extract the Abstract or Introduction/Description section** "
+        "unless the criterion description above explicitly asks you to evaluate abstract content. "
+        "The abstract is graded separately. Focus on the specific content sections "
+        "(Results, Methods, Schematics, Discussion, Conclusion, etc.) that address this criterion.\n"
+    )
+
     return f"""You are a technical report analyzer. Your task is to extract sections of a student report that are relevant to evaluating a specific rubric criterion.
 
 **Rubric Criterion to Evaluate:**
@@ -426,7 +440,7 @@ def build_extraction_prompt(report: Dict[str, Any], criterion: Dict[str, Any]) -
 
 **Report Structure:**
 {heading_list}
-
+{abstract_guidance}
 **CRITICAL RULE — Embed Shortcodes:**
 Any line containing `{{{{< embed ... >}}}}` that appears in or near a relevant section MUST be copied verbatim into your output. These shortcodes reference figures and data plots that are essential for evaluation. Do not summarize, paraphrase, or omit them.
 
@@ -446,7 +460,8 @@ Do NOT limit yourself to keyword matching. Think about what information would he
 
 Once you've identified the relevant sections:
 1.  Read the full report below carefully.
-2.  Extract the identified sections verbatim, preserving headings, formatting, and all `{{{{< embed >}}}}` shortcodes.
+2.  Extract ONLY the identified sections verbatim, preserving headings, formatting, and all `{{{{< embed >}}}}` shortcodes.
+    **NEVER copy the entire report. Output ONLY the 1-3 most relevant sections.**
 {comprehensiveness_guidance}
 4.  If multiple sections are relevant, separate them with "---".
 5.  If the criterion is not addressed in the report, output the single line: "No relevant content found."
@@ -482,7 +497,7 @@ def call_extraction_api(prompt: str, model: str, max_retries: int = 3,
 
     extractor_model = provider_config['extractor']
     extraction_config = {
-        'max_output_tokens': provider_config.get('extractor_max_output_tokens') or 1500,
+        'max_output_tokens': provider_config.get('extractor_max_output_tokens') or 6000,
         'request_timeout': provider_config.get('request_timeout') or 240,
     }
 
