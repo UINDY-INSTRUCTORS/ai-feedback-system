@@ -91,6 +91,18 @@ def _find_repos_in_dir(directory: Path) -> list[Path]:
                   if p.is_dir() and (p / 'index.qmd').exists())
 
 
+def _error_repo_names(csv_path: Path) -> set[str]:
+    """Return repo names that have at least one ERROR cell in a batch CSV."""
+    names = set()
+    with open(csv_path, newline='') as f:
+        reader = csv.reader(f)
+        next(reader, None)  # skip header
+        for row in reader:
+            if any(cell.strip().upper() == 'ERROR' for cell in row[1:]):
+                names.add(row[0])
+    return names
+
+
 def load_repo_paths(repos_file, repos_dir,
                     pdf_dir=None, submissions_dir=None) -> list[Path]:
     if repos_file:
@@ -273,6 +285,9 @@ def main():
                         help='Re-use extraction.json files from a previous --extract-only run '
                              '(skips extractor calls, runs feedback AI only)')
 
+    parser.add_argument('--retry-errors', metavar='CSV',
+                        help='Path to a previous batch CSV; re-run only repos that had ERROR results.')
+
     parser.add_argument('--rubric-dir', metavar='DIR',
                         help='Directory containing rubric.yml / RUBRIC.md / guidance.md to inject '
                              'into each repo before processing (originals are restored after).')
@@ -305,6 +320,26 @@ def main():
         print(f'Profile: {args.profile}')
     print()
 
+    # --retry-errors: filter to repos with ERROR in a previous CSV run.
+    if args.retry_errors:
+        retry_csv = Path(args.retry_errors).resolve()
+        if not retry_csv.is_file():
+            print(f'--retry-errors CSV not found: {retry_csv}', file=sys.stderr)
+            sys.exit(1)
+        error_names = _error_repo_names(retry_csv)
+        if not error_names:
+            print('No ERROR rows found in the provided CSV — nothing to retry.')
+            sys.exit(0)
+        before = len(repos)
+        repos = [r for r in repos if r.name in error_names]
+        print(f'--retry-errors: {len(repos)} of {before} repo(s) had errors in {retry_csv.name}')
+        for r in repos:
+            print(f'  {r.name}')
+        print()
+        if not repos:
+            print('None of the error repos were found in the repo source.', file=sys.stderr)
+            sys.exit(1)
+
     rubric_dir = Path(args.rubric_dir).resolve() if args.rubric_dir else None
     if rubric_dir and not rubric_dir.is_dir():
         print(f'--rubric-dir not found: {rubric_dir}', file=sys.stderr)
@@ -314,6 +349,21 @@ def main():
     if extractions_dir and not extractions_dir.is_dir():
         print(f'--use-extractions not found: {extractions_dir}', file=sys.stderr)
         sys.exit(1)
+
+    # When replaying cached extractions, skip repos that have no extraction.json.
+    if extractions_dir:
+        filtered = [r for r in repos
+                    if (extractions_dir / r.name / 'extraction.json').exists()]
+        skipped = [r.name for r in repos if r not in filtered]
+        if skipped:
+            print(f'Skipping {len(skipped)} repo(s) with no extraction in {extractions_dir}:')
+            for name in skipped:
+                print(f'  {name}')
+            print()
+        repos = filtered
+        if not repos:
+            print('No repos with cached extractions found.', file=sys.stderr)
+            sys.exit(1)
 
     all_scores = []
     ok = 0
@@ -379,6 +429,43 @@ def main():
     for line in _md_table_lines(header, rows):
         print(line)
     print()
+
+    # Detect any per-criterion ERRORs and print actionable retry guidance.
+    error_repos = []
+    for entry in all_scores:
+        crit_errors = [cn for cn, info in entry.get('criteria', {}).items()
+                       if info.get('assessment') == 'ERROR']
+        if entry.get('error') or crit_errors:
+            error_repos.append((entry['repo'], crit_errors or ['(whole-repo failure)']))
+
+    if error_repos:
+        print(f'{"!"*60}')
+        print(f'WARNING: {len(error_repos)} repo(s) had errors (likely API timeouts):')
+        for repo_name, criteria in error_repos:
+            print(f'  {repo_name}: {", ".join(criteria)}')
+        print()
+        print('To retry only the failed repos (reusing cached extractions if available):')
+        retry_cmd_parts = ['uv run batch-feedback.py']
+        # Reconstruct repo-source flags
+        if args.repos:
+            retry_cmd_parts.append(f'  --repos {args.repos}')
+        elif args.pdf_dir:
+            retry_cmd_parts.append(f'  --pdf-dir {args.pdf_dir}')
+            retry_cmd_parts.append(f'  --submissions-dir {args.submissions_dir}')
+        else:
+            retry_cmd_parts.append(f'  --repos-dir {args.repos_dir}')
+        retry_cmd_parts.append(f'  --retry-errors {csv_path}')
+        if args.rubric_dir:
+            retry_cmd_parts.append(f'  --rubric-dir {args.rubric_dir}')
+        if args.use_extractions:
+            retry_cmd_parts.append(f'  --use-extractions {args.use_extractions}')
+        if args.no_render:
+            retry_cmd_parts.append('  --no-render')
+        if args.profile:
+            retry_cmd_parts.append(f'  --profile {args.profile}')
+        print(' \\\n'.join(retry_cmd_parts))
+        print(f'{"!"*60}')
+        print()
 
 
 if __name__ == '__main__':
