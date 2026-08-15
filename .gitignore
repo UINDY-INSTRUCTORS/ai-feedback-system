@@ -5,4 +5,14 @@ __pycache__
 .claude
 *-feedback-*
 repos*.txt
+340*.txt
+
+# batch run outputs — student submissions and generated feedback
+*-feedback/
+*-extractions/
+ee340-lab*/
+
+# per-assignment rubrics — maintained outside the repo, injected via --rubric-dir
+ph230-p*/
+ph280-p*/
 
