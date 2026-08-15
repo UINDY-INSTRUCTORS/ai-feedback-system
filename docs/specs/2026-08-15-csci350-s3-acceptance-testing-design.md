@@ -126,9 +126,14 @@ calculation applies the gating rule.
 standard: S3
 seed: 20260929
 floor: U                                  # level when the first tier fails
+timeout_s: 120                            # default wall-clock budget per tier
+timeouts: {prop: 600}                     # per-tier overrides
 tiers:  [smoke, parse, eval, prop]        # evaluation order
 awards: {smoke: U, parse: D, eval: S, prop: E}   # level awarded when this tier PASSES
 ```
+
+`timeout_s` and `timeouts` were added during implementation: §5 requires per-tier timeouts and
+the manifest originally had nowhere to put them.
 
 `awards` maps a tier to the level earned by *passing* it; `floor` is the level when even the
 first tier fails. For S3 the floor and `awards.smoke` are both U, since building without
@@ -220,6 +225,39 @@ the harness, that divergence is itself a signal worth having.
 - **The AI feedback layer.** It consumes `assessment.json` and is unchanged by this spec.
 - **Brightspace Outcomes import.** `assessment.json` is designed to feed it; the import path itself is not specified here.
 
+## 6a. What plan 1 actually shipped, and where it diverges from §4.3
+
+Plan 1 (`csci350-devcontainer`, PR #1, 18 commits) built the runner. Three divergences from
+this spec, recorded so the spec and the artifact do not drift apart silently:
+
+- **No `failures` array.** §4.3 shows per-tier `failures: [{case, expected, got}]`. The shipped
+  `assessment.json` carries a flat `output` string plus `duration_s` instead. Structured
+  per-case failures have to come from the test framework, which is plan 2's territory —
+  `create_issue.py` and the Brightspace import should expect `output` until then.
+- **Per-tier timeouts only.** §5 asks for a per-*test* timeout so one hanging case cannot mask
+  the tests after it. Plan 1 implements the per-tier budget; per-test lives in the test
+  framework, so it lands with the tier targets in plan 2. Until then a single infinite loop
+  fails the whole tier and understates what works.
+- **The 64 KB output cap bounds the report, not memory.** `communicate()` reads a tier's output
+  to EOF before truncation sees it — a 100 MB tier was measured at +348 MB RSS. A runaway
+  `printf` inside the 600 s `prop` budget can still exhaust the harness, which produces *no*
+  report at all. Bounding memory needs a streaming read replacing `communicate()`.
+
+## 6b. Two integrity gaps this spec does not close
+
+Found during plan 1's final review. Both are spec-level, not implementation defects.
+
+- **The Makefile is the gate, and §5 does not protect it.** §5 promises student edits to tests
+  cannot move the level, and restores `test/` from the pinned template. But the level is read
+  from `make test-<tier>` exit codes, and the Makefile is not in `test/`. A student who
+  rewrites `test-eval:` to `@true` moves their own level, untouched by the restoration.
+  Plan 3 must restore the Makefile — or at least the tier targets — alongside `test/`.
+- **`LEVEL_SEED` is student-overridable.** The runner exports it into the environment, and a
+  `LEVEL_SEED := 1` assignment inside the Makefile takes precedence over an environment
+  variable in GNU Make. Determinism is therefore a courtesy rather than an enforcement.
+  Passing it as a command-line override (`make test-<tier> LEVEL_SEED=<n>`) outranks any
+  Makefile assignment; adopt that when plan 2 lands the tier targets.
+
 ## 7. Open questions
 
 1. **Feedback volume cap.** The design note proposes capping feedback tags at 3 per
@@ -227,8 +265,13 @@ the harness, that divergence is itself a signal worth having.
    `max_concurrent_requests: 2` will throttle at deadlines. The level recomputation is free,
    so students must understand the level loop and the feedback loop as two different things
    with different limits.
-2. **Reassessment windows** (course plan §3a decision 2). Substantially defused — because the
-   level is computed rather than judged, a resubmission costs nothing. The remaining bound is
-   on AI feedback, not on levels.
-3. **S4 granularity** (course plan §3a decision 3) — one polyglot outcome or one per paradigm.
-   Still open; decides how many Brightspace Outcomes to stand up.
+2. ~~**Reassessment windows**~~ — **CLOSED 8/15**, course plan §3c. One week after each
+   deadline, extended past breaks, unlimited resubmissions inside it, feedback capped at 3
+   requests per assignment, all closing Wed Dec 16. The rule is only defensible *because*
+   levels are computed, which makes plan 2 a prerequisite for the policy rather than merely
+   for the tooling: if the acceptance suites are not in place, a week-long window becomes a
+   judgement call made 34 times.
+3. ~~**S4 granularity**~~ — **CLOSED 8/15**, course plan §3a. Split one per paradigm:
+   **S4a** imperative/OO, **S4b** functional, **S4c** logic. Three Brightspace Outcomes, so
+   plan 2 needs three tier sets, not one — and S4c rests on a single artifact (HW 8 Prolog,
+   authored fresh), which makes its suite the one with no second chance to get right.
