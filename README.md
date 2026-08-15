@@ -433,6 +433,21 @@ Then download the artifacts from the Actions tab to inspect:
 
 ---
 
+## Development
+
+### Keeping `check_qmd.py` in sync
+
+`scripts/check_qmd.py` is a copy of the canonical version in `quarto-courses/shared/check_qmd.py`.
+When the canonical changes, sync it here with:
+
+```bash
+make sync-check-qmd
+```
+
+Do not edit `scripts/check_qmd.py` directly — edit the canonical and then sync.
+
+---
+
 ## Support
 
 ### Getting Help
